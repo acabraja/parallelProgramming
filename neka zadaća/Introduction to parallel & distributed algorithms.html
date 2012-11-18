@@ -1,0 +1,1786 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+
+<title>Introduction to parallel &amp; distributed algorithms</title>
+<link rel="shortcut icon" href="http://www.toves.org/img/cs280.ico">
+<style type="text/css">
+body { font-family: Georgia, serif; text-align: center }
+div.wrapper { margin: 0 auto; width: 100%; text-align: left; max-width: 45em }
+p { text-align: justify }
+h1, h2, h3, h4 { font-family: Verdana, sans-serif }
+a { text-decoration: none; color: #800000 }
+a.sec { color: black }
+table.contents { white-space: nowrap; font-family: Verdana, sans-serif }
+table.contents td { white-space: nowrap }
+table.truth td { text-align: center }
+table.arrays th { text-align: left }
+table.arrays td { text-align: right }
+span.num { font-size: 80%; position: relative; bottom: .2ex }
+span.den { font-size: 80%; margin-left: -.3em }
+code.java b { color: #0000c0 }
+code.java tt { color: #800000 }
+code.java i { color: #008000 }
+</style>
+</head><body><div class="wrapper">
+
+<h1>Introduction to parallel &amp; distributed algorithms</h1>
+
+<table><tbody>
+<tr><td valign="top">
+
+<table class="contents"><tbody>
+<tr><td colspan="2"><b><big>Contents</big></b></td></tr>
+<tr><td valign="top" align="center"><a href="#1">1.</a></td>
+    <td><a href="#1">Parallel &amp; distributed models</a>
+    <br><a href="#1.1">1.1. Parallel computing</a>
+    <br><a href="#1.2">1.2. Distributed computing</a>
+    </td></tr>
+<tr><td valign="top" align="center"><a href="#2">2.</a></td>
+    <td><a href="#2">Parallel scan</a>
+    <br><a href="#2.1">2.1. Adding array entries</a>
+    <br><a href="#2.2">2.2. Generalizing to parallel scan</a>
+    <br><a href="#2.3">2.3. Counting initial 1's</a>
+    <br><a href="#2.4">2.4. Evaluating a polynomial</a>
+    </td></tr>
+<tr><td valign="top" align="center"><a href="#3">3.</a></td>
+    <td><a href="#3">Parallel prefix scan</a>
+    <br><a href="#3.1">3.1. The prefix scan algorithm</a>
+    <br><a href="#3.2">3.2. Filtering an array</a>
+    <br><a href="#3.3">3.3. Adding big integers</a>
+    </td></tr>
+<tr><td valign="top" align="center"><a href="#4">4.</a></td>
+    <td><a href="#4">Sorting</a>
+    <br><a href="#4.1">4.1. Merging</a>
+    <br><a href="#4.2">4.2. Mergesort</a>
+    </td></tr>
+<tr><td align="center"><a href="#5">5.</a></td>
+    <td><a href="#5">Hardness of parallelization</a></td></tr>
+<tr><td></td>
+    <td><a href="#rev">Review questions</a>
+    <br><a href="#soln">Solutions to review questions</a>
+    <br><a href="#ex">Exercises</a></td></tr>
+<tr><td></td>
+    <td><a href="#refs">References</a></td></tr>
+</tbody></table>
+</td><td valign="top">
+<p><em>by Carl Burch, Hendrix College, August 2009</em></p>
+
+<p><em>This was written as a unit for an introductory algorithms course. It's
+material that often doesn't appear in textbooks for such courses, which is a pity
+because distributed algorithms is an important topic in today's world.</em></p>
+
+<p><a href="http://www.toves.org/books/distalg/distalg.pdf"><img src="Introduction%20to%20parallel%20&amp;%20distributed%20algorithms_files/pdf.png" height="36" width="36" border="0"> PDF version available</a></p>
+
+<a rel="license" href="http://creativecommons.org/licenses/by-sa/3.0/us/"><img alt="Creative Commons License" style="border-width: 0pt;" src="Introduction%20to%20parallel%20&amp;%20distributed%20algorithms_files/88x31.png"></a><br><span xmlns:dc="http://purl.org/dc/elements/1.1/" href="http://purl.org/dc/dcmitype/Text" property="dc:title" rel="dc:type">Introduction to parallel &amp; distributed
+algorithms</span> by <a xmlns:cc="http://creativecommons.org/ns#" href="http://www.cburch.com/" property="cc:attributionName" rel="cc:attributionURL">Carl
+Burch</a> is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/3.0/us/">Creative
+Commons Attribution-Share Alike 3.0 United States
+License</a>.<br>Based on a work at <em><a xmlns:dc="http://purl.org/dc/elements/1.1/" href="http://www.toves.org/books/distalg/" rel="dc:source">www.toves.org/books/distalg/</a></em>.
+
+</td></tr></tbody></table>
+
+<p>Classically, algorithm designers assume a computer
+with only one processing element; the algorithms they design are
+said to be <strong>sequential</strong>, since the algorithms' steps must be performed in a particular <em>sequence</em>, one after another. But today's computers often have
+multiple processors, each of which performs its own sequence of steps. Even basic desktop computers often have multicore
+processors that include a handful of processing elements.  But
+also significant are vast clusters of computers, such as those
+used by the Department of Defense to simulate nuclear explosions and by
+Google to process search engine queries. An example is the Roadrunner
+system at Los Alamos National Laboratory.  As of 2009, it has 129,600
+processors and is ranked as the world's fastest supercomputer.</p>
+
+<p>Suppose we're working with such a real-world multiprocessor
+system.  Inevitably, we'll run into some problem that we want
+it to solve. Letting <var>T</var> represent the amount of
+time that a single processor takes to solve this problem,
+we would hope to develop an algorithm that takes
+<span class="num"><var>T</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span> time on a <var>p</var>-processor
+system.  (We'll invariably use the variable <var>p</var> to represent
+the number of processors in our system.)  In reality, this will rarely
+be possible to achieve entirely: The processors will almost always need 
+to spend some time coordinating their work, which will lead to a 
+penalty.</p>
+
+<p>Sometimes such a near-optimal speedup is easy to achieve.  Suppose,
+for instance, that we have an array of integers, and we want to
+display all the negative integers in the array. We can divide the
+array into equal-sized segments, one segment for each processor,
+and each processor can
+display all the negative integers in its segment.  The sequential
+algorithm would take <var>O</var>(<var>n</var>) time. In our
+multiprocessor algorithm each processor handles an array segment with at most
+&#8968;<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&#8969; elements, so processing the
+whole array
+takes <var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>) time.</p>
+
+<p>But there are some problems where it is hard to imagine how to
+use multiple processors to speed up the processing time. An
+example of this is determining the depth-first search order of a
+graph: It seems that any algorithm will be <q>forced</q> to process a child only after its parent, so if the graph's height is something like <span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den">2</span>, it will necessarily take <var>O</var>(<var>n</var>) time. This seems like an <strong>inherently sequential</strong>
+problem. And, indeed, it has proven to be so, as we'll see in
+<a href="#5">Section&nbsp;5</a>.</p>
+
+<p>Or consider the problem where we're given two integer arrays representing
+very large numbers (where <tt>a[0]</tt> contains the 1's digit,
+<tt>a[1]</tt> contains the 10's digit, and so on), and we want to compute
+a new array containing the sum of the two numbers. 
+From grade school, you know a sequential algorithm to do this
+that takes <var>O</var>(<var>n</var>) time.
+We can't easily adapt this algorithm
+to use many processors, though: In processing each segment of the arrays,
+we need to know whether there is a carry from the preceding segments.
+Thus, this problem too seems <em>inherently sequential</em>. But in this case our intuition has failed us:
+We'll see in <a href="#3.3">Section&nbsp;3.3</a> that in fact there is an
+algorithm that can add two such big-integers in
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;log&nbsp;<var>p</var>) time.</p>
+
+<p>As with adding big-integers, some very simple
+problems that we consider hardly worth studying in
+single-processor systems become more interesting in the
+multiprocessor context. This introduction will pay particularly close
+attention to algorithms that deal with arrays of numbers.
+We'll begin in <a href="#1">Section&nbsp;1</a> by first presenting
+more formal models of parallel and distributed systems.
+Then in <a href="#2">Section&nbsp;2</a> we'll look at the particularly
+simple problem of adding all the numbers of an array, a problem that
+can be generalized to <q>parallel scan,</q> which can be applied to other
+situations as well.
+In <a href="#3">Section&nbsp;3</a>, we'll look at a closely related
+algorithm called <q>parallel prefix scan,</q> and again we'll look at
+several of its applications.
+<a href="#4">Section&nbsp;4</a> will look at the problem of sorting
+an array on a multiprocessor system, while
+<a href="#5">Section&nbsp;5</a> will discuss how complexity theory
+can be used to argue that problems are indeed inherently sequential.</p>
+
+<h2><a class="sec" name="1">1.</a> Parallel &amp; distributed models</h2>
+
+<p>Multiprocessor systems come in many different flavors, but there are two
+basic categories: parallel computers and distributed computers. These two terms
+are used with some overlap, but usually a <em>parallel</em> system is one in
+which the processors are closely connected, while a <em>distributed</em> system
+has processors that are more independent of each other.</p>
+
+<h3><a class="sec" name="1.1">1.1.</a> Parallel computing</h3>
+
+<p>In a <strong>parallel computer</strong>, the processors are closely connected. Frequently,
+all processors share the same memory, and the processors communicate by accessing this <b>shared memory</b>.
+ Examples of parallel computers include the multicore processors found 
+in many computers today (even cheap ones), as well as many graphics 
+processing units (GPUs).</p>
+
+<p>As an example of code for a shared-memory computer, below is a Java fragment
+intended to find the sum of all the elements in a long array. Variables whose name
+begin with <tt>my_</tt> are specific to each processor; this might be implemented
+by storing these variables in individual processors' registers. The code fragment
+assumes that a variable <code>array</code> has already been set up with the
+numbers we want to add and that there is a variable <code>procs</code> that
+indicates how many processors our system has. In addition, we assume each register
+has its own <code>my_pid</code> variable, which stores that processor's own
+<strong>processor ID</strong>, a unique number between 0 and
+<code>procs</code>&nbsp;&#8722;&nbsp;1.</p>
+
+<blockquote><code class="java"><i>//&nbsp;1.&nbsp;Determine&nbsp;where&nbsp;processor's&nbsp;segment&nbsp;is&nbsp;and&nbsp;add&nbsp;up&nbsp;numbers&nbsp;in&nbsp;segment.</i><br>
+count&nbsp;=&nbsp;array.length&nbsp;/&nbsp;procs;<br>
+my_start&nbsp;=&nbsp;my_pid&nbsp;*&nbsp;count;<br>
+my_total&nbsp;=&nbsp;array[my_start];<br>
+<b>for</b>(my_i&nbsp;=&nbsp;<tt>1</tt>;&nbsp;my_i&nbsp;&lt;&nbsp;count;&nbsp;my_i++)&nbsp;my_total&nbsp;+=&nbsp;array[my_start&nbsp;+&nbsp;my_i];<br>
+<br>
+<i>//&nbsp;2.&nbsp;Store&nbsp;subtotal&nbsp;into&nbsp;shared&nbsp;array,&nbsp;then&nbsp;add&nbsp;up&nbsp;the&nbsp;subtotals.</i><br>
+subtotals[my_pid]&nbsp;=&nbsp;my_total;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>//&nbsp;line&nbsp;A&nbsp;in&nbsp;remarks&nbsp;below</i><br>
+my_total&nbsp;=&nbsp;subtotals[<tt>0</tt>];&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>//&nbsp;line&nbsp;B&nbsp;in&nbsp;remarks&nbsp;below</i><br>
+<b>for</b>(my_i&nbsp;=&nbsp;<tt>1</tt>;&nbsp;my_i&nbsp;&lt;&nbsp;procs;&nbsp;my_i++)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;my_total&nbsp;+=&nbsp;subtotals[my_i];&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>//&nbsp;line&nbsp;C&nbsp;in&nbsp;remarks&nbsp;below</i><br>
+}<br>
+<br>
+<i>//&nbsp;3.&nbsp;If&nbsp;array.length&nbsp;isn't&nbsp;a&nbsp;multiple&nbsp;of&nbsp;procs,&nbsp;then&nbsp;total&nbsp;will&nbsp;exclude&nbsp;some<br>
+//&nbsp;elements&nbsp;at&nbsp;the&nbsp;array's&nbsp;end.&nbsp;Add&nbsp;these&nbsp;last&nbsp;elements&nbsp;in&nbsp;now.</i><br>
+<b>for</b>(my_i&nbsp;=&nbsp;procs&nbsp;*&nbsp;count;&nbsp;my_i&nbsp;&lt;&nbsp;array.length;&nbsp;my_i++)&nbsp;my_total&nbsp;+=&nbsp;array[my_i];</code></blockquote>
+
+<p>Here, we first divide the array into segments of length <code>count</code>, and
+each processor adds up the elements within its segment, placing that into its
+variable <code>my_total</code>. We write this variable into shared memory in
+line&nbsp;A so that all processors can read it; then we go through this shared
+array of subtotals to find the total of the subtotals. The last step is to take
+care of any numbers that may have been excluded by trying to divide the array
+into <var>p</var> equally-sized segments.</p>
+
+<h4>Synchronization</h4>
+
+<p>An important detail in the above shared-memory program is that
+each processor must complete line&nbsp;A before any other processor tries to
+use that saved value in line&nbsp;B or line&nbsp;C. One way of ensuring this is to build the computer
+so that all processors share the same program counter as they step through
+identical programs. In such a system, all processors would execute line&nbsp;A 
+simultaneously. Though it works, this shared-program-counter approach is quite
+rare because it can be difficult to write a program so that all processors work identically, and because we often want
+different processors to perform different tasks.</p>
+
+<p>The more common approach is to allow each processor to execute at its
+ own pace,
+giving programmers the responsibility to include code enforcing 
+dependencies between
+processors' work. In our example above, we would add code between 
+line&nbsp;A and line&nbsp;B to enforce the restriction that all 
+processors complete
+line&nbsp;A before any proceed to line&nbsp;B and line&nbsp;C. If we 
+were using Java's built-in features for supporting such synchronization 
+between threads, we could accomplish this by introducing a new shared 
+variable <code>number_saved</code> whose value starts out at 0. The code following line&nbsp;A would be as follows.</p>
+
+<blockquote><code class="java"><b>synchronized</b>(subtotals)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;number_saved++;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>if</b>(number_saved&nbsp;==&nbsp;procs)&nbsp;subtotals.notifyAll();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>while</b>(number_saved&nbsp;&lt;&nbsp;procs)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>try</b>&nbsp;{&nbsp;subtotals.wait();&nbsp;}&nbsp;<b>catch</b>(InterruptedException&nbsp;e)&nbsp;{&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+}</code></blockquote>
+
+<p>Studying specific synchronization constructs such as those in Java is
+ beyond this tutorial's scope. But even if you're not familiar with such
+ constructs, you might be able to guess what the above represents: Each 
+processor
+increments the shared counter and then waits until it receives a signal.
+ The last
+processor to increment the counter sends a signal that awakens all the 
+others to continue forward to line&nbsp;B.</p>
+
+<h4>Shared memory access</h4>
+
+<p>Another important design constraint in a shared-memory system is how programs are
+allowed to access the same memory address simultaneously. There are
+three basic approches.</p>
+
+<ul>
+
+<li><p><strong>CRCW: Concurrent Read, Concurrent Write.</strong> Simultaneous
+reads and writes are allowed to a memory cell. The model must indicate how
+simultaneous writes are handled.</p>
+
+   <ul>
+   <li>Common Write: If processors write simultaneously, they must write same value.</li>
+   <li>Priority Write: Processors have priority order, and the highest-priority processor's write <q>wins</q> in case of conflict.</li>
+   <li>Arbitrary Write: In case of conflict, one of the requested writes
+ will succeed. But the outcome is not predictable, and the program must 
+work regardless of which processor <q>wins.</q></li>
+   <li>Combining Write: Simultaneous writes are combined with some function, such as adding values together.</li>
+   </ul></li>
+
+<li><p><strong>CREW: Concurrent Read, Exclusive Write.</strong> Here 
+different processors are allowed to read the same memory cell 
+simultaneously, but we must write our program so that only one processor
+ can write to any memory cell at a time.</p></li>
+
+<li><p><strong>EREW: Exclusive Read, Exclusive Write.</strong> The program must be written so that no memory cell is accessed simultaneously in any way.</p></li>
+
+<li><p><strong>ERCW: Exclusive Read, Concurrent Write.</strong> There is no reason to consider this possibility.</p></li>
+
+</ul>
+   
+<p>In our array-totaling example, we used a Common-Write CRCW model. All processors write to the <code>count</code> variable, but they all
+write an identical value to it. This write, though, is the only concurrent write, and
+the program would work just as well with <code>count</code> changed to
+<code>my_count</code>. In this case, our program would fit into the more restrictive CREW model.</p>
+
+<h3><a class="sec" name="1.2">1.2.</a> Distributed computing</h3>
+
+<p>A <strong>distributed system</strong> is one in which the
+processors are less strongly connected. A typical distributed
+system consists of many independent computers in the same room,
+attached via network connections. Such an arrangement is often called
+a <strong>cluster</strong>.</p>
+
+<p>In a distributed system, each processor has its own independent memory.
+This precludes using shared memory for communicating.  Processors
+instead communicate by sending messages.  In a
+cluster, these messages are sent via the network. Though
+<b>message passing</b> is much slower than shared memory, it scales 
+better
+for many processors, and it is cheaper.
+Plus programming such a system is arguably easier than programming for a
+ shared-memory system, since the synchronization involved in waiting to 
+receive a message is more intuitive.
+Thus, most large systems today use message passing for interprocessor 
+communication.</p>
+
+<p>From now on, we'll be working with a
+message-passing system implemented using the following two functions.</p>
+
+<dl>
+
+<dt><tt>void send(int dst_pid, int data)</tt></dt>
+<dd><p>Sends a message containing the integer <tt>data</tt> to the
+processor whose ID is <tt>dst_pid</tt>. Note that the function's return
+may be delayed until the receiving processor requests to
+receive the data &#8212; though the message might instead be buffered so that
+the function can return immediately.</p></dd>
+
+<dt><tt>int receive(int src_pid)</tt></dt>
+<dd><p>Waits until the processor whose ID is <tt>src_pid</tt> sends a
+message and returns the integer in that message. This is called a
+<strong>blocking</strong> receive. Some systems also
+support a <strong>non-blocking</strong> receive, which returns
+immediately if the processor hasn't yet sent a message.
+Another variation is a <tt>receive</tt> that allows
+a program to receive the first message sent by any processor. However,
+in our model, the call will always wait until it receives a message (unless there is already a message waiting to be sent), and
+the source processor's ID must always be specified.</p></dd>
+
+</dl>
+
+<p>To demonstrate how to program in this model, we return to our example of adding all
+the numbers in an array. We imagine that each processor already
+has its segment of the array in its memory, called
+<code>segment</code>. The variable <code>procs</code> holds the
+number of processors in the system, and <code>pid</code> holds the
+processor's ID (a unique integer between 0 and
+<code>procs</code>&nbsp;&#8722;&nbsp;1, as before).</p>
+
+<blockquote><code class="java">total&nbsp;=&nbsp;segment[<tt>0</tt>];<br>
+<b>for</b>(i&nbsp;=&nbsp;<tt>1</tt>;&nbsp;i&nbsp;&lt;&nbsp;segment.length;&nbsp;i++)&nbsp;total&nbsp;+=&nbsp;segment[i];<br>
+<br>
+<b>if</b>(pid&nbsp;&gt;&nbsp;<tt>0</tt>)&nbsp;{&nbsp;<i>//&nbsp;each&nbsp;processor&nbsp;but&nbsp;0&nbsp;sends&nbsp;its&nbsp;total&nbsp;to&nbsp;processor&nbsp;0</i><br>
+&nbsp;&nbsp;&nbsp;&nbsp;send(<tt>0</tt>,&nbsp;total);<br>
+}&nbsp;<b>else</b>&nbsp;{&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>//&nbsp;processor&nbsp;0&nbsp;adds&nbsp;all&nbsp;these&nbsp;totals&nbsp;up</i><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>for</b>(<b>int</b>&nbsp;k&nbsp;=&nbsp;<tt>1</tt>;&nbsp;k&nbsp;&lt;&nbsp;procs;&nbsp;k++)&nbsp;total&nbsp;+=&nbsp;receive(k);<br>
+}</code></blockquote>
+
+<p>This code says that each processor should first add the elements
+of its segment. Then each processor except processor&nbsp;0 should
+send its total to processor&nbsp;0. Processor&nbsp;0 waits to receive each
+of these messages in succession, adding the total of that processor's
+segment into its total. By the end, processor&nbsp;0 will have the
+total of all segments.</p>
+
+<p>In a large distributed system, this approach would be flawed since inevitably
+some processors would break, often due to the failure of some equipment such as
+a hard disk or power supply. We'll ignore this issue here, but it is an important
+issue when writing programs for large distributed systems in real life.</p>
+
+<h2><a class="sec" name="2">2.</a> Parallel scan</h2>
+
+<p>Summing the elements of an <var>n</var>-element array takes
+<var>O</var>(<var>n</var>) time on a single processor.
+Thus, we'd hope to find an algorithm for a
+<var>p</var>-processor system that takes
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)
+ time.
+In this section, we'll work on developing a good algorithm for this 
+problem,
+then we'll see that this algorithm can be generalized to apply to many 
+other
+problems where, if we were to write a program to solve it on a 
+single-processor system, the program would consist basically of a single
+ loop stepping through an array.</p>
+
+<h3><a class="sec" name="2.1">2.1.</a> Adding array entries</h3>
+
+<p>So how does our program of
+<a href="http://www.toves.org/books/distalg/1.2">Section&nbsp;1.2</a> do?
+Well, the first loop to add the numbers in the segment takes
+each processor
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>) time,
+as we would like.
+But then processor&nbsp;0 must perform its loop to receive the
+subtotals from each of the <var>p</var>&nbsp;&#8722;&nbsp;1 
+other processors; this loop takes <var>O</var>(<var>p</var>) time.
+So the total time taken is
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;<var>p</var>)
+&#8212; a bit more than the
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>) time we
+hoped for.</p>
+
+<p>(In distributed systems, the cost of communication can be quite
+large relative to computation, and so it sometimes pays to analyze communication time without considering the time for
+computation. The first loop to add the numbers in the segment
+takes no communication, but processor&nbsp;0 must wait for
+<var>p</var>&nbsp;&#8722;&nbsp;1 messages, so our algorithm here
+takes <var>O</var>(<var>p</var>) time for communication.
+In this introduction, though, we'll analyze the overall computation time.)</p>
+
+<p>Is the extra <q>+&nbsp;<var>p</var></q> in this time bound something worth
+worrying about? For a small system where <var>p</var> is rather
+small, it's not a big deal. But if
+<var>p</var> is something like <var>n</var><sup><small>0.8</small></sup>, then
+it's pretty notable: We'd be hoping for something that takes
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>n</var><sup><small>0.8</small></sup></span>)
+=&nbsp;<var>O</var>(<var>n</var><sup><small>0.2</small></sup>) time,
+but we end up with an algorithm that actually takes
+<var>O</var>(<var>n</var><sup><small>0.8</small></sup>) time.</p>
+
+<p>Here's an interesting alternative implementation that avoids
+the second loop.</p>
+
+<blockquote><code class="java">total&nbsp;=&nbsp;segment[<tt>0</tt>];<br>
+<b>for</b>(i&nbsp;=&nbsp;<tt>1</tt>;&nbsp;i&nbsp;&lt;&nbsp;segment.length;&nbsp;i++)&nbsp;total&nbsp;+=&nbsp;segment[i];<br>
+<b>if</b>(pid&nbsp;&lt;&nbsp;procs&nbsp;-&nbsp;<tt>1</tt>)&nbsp;total&nbsp;+=&nbsp;receive(pid&nbsp;+&nbsp;<tt>1</tt>);<br>
+<b>if</b>(pid&nbsp;&gt;&nbsp;<tt>0</tt>)&nbsp;send(pid&nbsp;-&nbsp;<tt>1</tt>,&nbsp;total);</code></blockquote>
+
+<p>Because there's no loop, you might be inclined to think that
+this takes
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>) time.
+But we need to remember that <code>receive</code> is a blocking
+call, which can involve waiting. As a result, we need to think
+through how the communication works. In this fragment, all
+processors except the last attempt to <code>receive</code> a
+message from the following processor. But only
+processor&nbsp;<var>p</var>&nbsp;&#8722;&nbsp;1 skips over
+the <code>receive</code> and sends a message to its predecessor,
+<var>p</var>&nbsp;&#8722;&nbsp;2.
+Processor&nbsp;<var>p</var>&nbsp;&#8722;&nbsp;2 receives that
+message, adds it into its total, and then sends that to
+processor&nbsp;<var>p</var>&nbsp;&#8722;&nbsp;3.
+Thus our totals cascade down until they reach processor&nbsp;0,
+which does not attempt to send its total anywhere.
+The depth of this cascade is <var>p</var>&nbsp;&#8722;&nbsp;1,
+so in fact this fragment takes just as much time as
+before,
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;<var>p</var>).</p>
+
+<p>Can we do any better? Well, yes, we can: After all, in our
+examples so far, we've had only one addition of subtotals at a
+time. A simple improvement is to divide the processors into
+pairs, and one processor of each pair adds its partner's
+subtotal into its own. Since all these
+<span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">2</span> additions happen simultaneously, this
+takes <var>O</var>(1) time &#8212; and we're left with half as
+many subtotals to sum together as before.
+We repeat this process of pairing off the
+remaining processors, each time halving how many subtotals remain to add together.
+The following diagram illustrates this.
+(The blue numbers indicate processor IDs.)</p>
+
+<center><img src="Introduction%20to%20parallel%20&amp;%20distributed%20algorithms_files/sum.png" height="158" width="328"></center>
+
+<p>Thus, in the first round, processor&nbsp;1 sends its total to
+processor&nbsp;0, processor&nbsp;3 to processor&nbsp;2, and so on.
+The <span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">2</span> receiving processors all do their
+work simultaneously. In the next round, processor&nbsp;2 sends its total to
+processor&nbsp;0, processor&nbsp;6 to processor&nbsp;4, and so
+on, leaving us with <span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">4</span> sums, which again can all be computed simultaneously.
+After only
+&#8968;log<sub><small>2</small></sub>&nbsp;<var>p</var>&#8969;
+rounds, processor&nbsp;0 will have the sum of all elements.</p>
+
+<p>The code to accomplish this is below. The first
+part is identical; the second looks a bit tricky, but it's just
+bookkeeping to get the messages passed as in the above diagram.</p>
+
+<blockquote><code class="java">total&nbsp;=&nbsp;segment[<tt>0</tt>];<br>
+<b>for</b>(i&nbsp;=&nbsp;<tt>1</tt>;&nbsp;i&nbsp;&lt;&nbsp;segment.length;&nbsp;i++)&nbsp;total&nbsp;+=&nbsp;segment[i];<br>
+<br>
+<b>for</b>(<b>int</b>&nbsp;k&nbsp;=&nbsp;<tt>1</tt>;&nbsp;k&nbsp;&lt;&nbsp;procs;&nbsp;k&nbsp;*=&nbsp;<tt>2</tt>)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>if</b>((pid&nbsp;&amp;&nbsp;k)&nbsp;!=&nbsp;<tt>0</tt>)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;send(pid&nbsp;-&nbsp;k,&nbsp;total);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>break</b>;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;<b>else&nbsp;if</b>(pid&nbsp;+&nbsp;k&nbsp;&lt;&nbsp;p)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;total&nbsp;+=&nbsp;receive(pid&nbsp;+&nbsp;k);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+}</code></blockquote>
+
+<p>This takes
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;log&nbsp;<var>p</var>)
+time, which is as good a bound as we're going to get.</p>
+
+<p>(A practical detail that's beyond the scope of this work is how to design a cluster so that it can indeed handle sending <span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">2</span>
+ messages all at once. A poorly designed network between the processors,
+ such as one built entirely of Ethernet hubs, could only pass one 
+message at a time. If the cluster operated this way, then the time taken
+ would still be <var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;<var>p</var>).)</p>
+
+<h3><a class="sec" name="2.2">2.2.</a> Generalizing to parallel scan</h3>
+
+<p>This algorithm we've seen to find the sum of an array easily 
+generalizes to other problems too. If we want to multiply all the items 
+of the array, we can perform the same algorithm as above, substituting <code>*=</code> in place of <code>+=</code>.
+ Or if we want to find the smallest element in the array, we can use the
+ same code again, except now we substitute an invocation of <code>Math.min</code> in place of addition.</p>
+
+<p>To speak more generically about when we can use the above algorithm, 
+suppose we have a binary operator &#8855; (which may stand for addition, 
+multiplication, finding the minimum of two values, or something else). 
+And suppose we want to compute</p>
+
+<center>
+<var>a</var><sub><small>0</small></sub>
+&#8855;
+<var>a</var><sub><small>1</small></sub>
+&#8855;
+&#8230;
+&#8855;
+<var>a</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;2</small></sub>
+&#8855;
+<var>a</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;1</small></sub>&nbsp;.
+</center>
+
+<p>We can substitute &#8855; for addition in our above parallel-sum algorithm <em>as long as &#8855; is associative.</em> That is, we need it to be the case that regardless of the values of <var>x</var>, <var>y</var>, and <var>z</var>, (<var>x</var>&nbsp;&#8855;&nbsp;<var>y</var>)&nbsp;&#8855;&nbsp;<var>z</var> =&nbsp;<var>x</var>&nbsp;&#8855;&nbsp;(<var>y</var>&nbsp;&#8855;&nbsp;<var>z</var>). When we're using our parallel sum algorithm with a generic associative operator &#8855;, we call it a <strong>parallel scan</strong>.</p>
+
+<p>The parallel scan algorithm has many applications. We already
+saw some applications: adding the elements of an array,
+multiplying them, or finding their minimum element. Another
+application is determining whether all values in an array of
+Booleans are <em>true</em>.  In this case, we can use AND
+(&#8743;) as our &#8855; operation. Similarly, if we want to
+determine whether any of the Boolean values in an array are
+<em>true</em>, then we can use OR (&#8744;). In the remainder of this section,
+ we'll see two more complex applications: counting how many 1's are at 
+the front of an array and evaluating a polynomial.</p>
+
+<h3><a class="sec" name="2.3">2.3.</a> Counting initial 1's</h3>
+
+<p>The parallel scan algorithm has some less obvious applications.
+Suppose we have an array of 0's and 1's, and we want to determine how
+many 1's begin the array. If our array were
+&lt;1, 1, 1, 0, 1, 1, 0, 1&gt;, we would want to determine that the
+array starts with three 1's.</p>
+
+<p>You probably won't be able to imagine on your own some associative
+operator that we might use here. However, there is a common
+trick that we can apply, and with some practice you'll learn how
+to use this trick.</p>
+
+<p>Our trick is to replace each element in the array with a
+pair. In this case, we'll change element
+<var>a</var><sub><small><var>i</var></small></sub>
+to become the pair
+(<var>a</var><sub><small><var>i</var></small></sub>,&nbsp;<var>a</var><sub><small><var>i</var></small></sub>) in our new
+array. We'll perform our scan on this new array of pairs using
+the &#8855; operator defined as follows:</p>
+
+<center>
+(<var>x</var>, <var>p</var>) &#8855; (<var>y</var>, <var>q</var>)
+= (<var>x</var> + <var>p</var> <var>y</var>, <var>p</var> <var>q</var>)
+</center>
+
+<p>To make sense of this, consider each pair to represent a
+segment of the array, with the first number saying how many 1's start
+the segment, while the second number is 1 or 0 depending on whether the 
+segment consists entirely of 1's. When we combine two adjacent segments 
+represented
+by the pairs
+(<var>x</var>,&nbsp;<var>p</var>) and
+(<var>y</var>,&nbsp;<var>q</var>),
+we first want to know the number of initial 1's in the combined
+segment. If <var>p</var> is 1, then the first segment consists entirely of
+<var>x</var> 1's, and so the total number of initial 1's
+in the combination includes these <var>x</var> 1's plus the
+<var>y</var> initial 1's of the second segment.
+But if <var>p</var> is 0, then the initial 1's in the combined
+segment lie entirely within the beginning of the first segment,
+where there are <var>x</var> 1's.
+The expression
+<var>x</var>&nbsp;+&nbsp;<var>p</var>&nbsp;<var>y</var>
+combines these two facts into one arithmetic expression.
+For the second part of the resulting pair, we observe that the
+combined segment consists of all 1's only if both segments
+consist of all 1's,
+and <var>p</var>&nbsp;<var>q</var> will compute 1 only if both
+<var>p</var> and <var>q</var> are both 1.</p>
+
+<p>In order to know that our parallel scan algorithm works correctly, we must
+verify that our &#8855; operator is associative. We try both ways of associating
+(<var>x</var>,&nbsp;<var>p</var>)&nbsp;&#8855;&nbsp;(<var>y</var>,&nbsp;<var>q</var>)&nbsp;&#8855;&nbsp;(<var>z</var>,&nbsp;<var>r</var>)
+and see that they match.</p>
+
+<blockquote><table><tbody><tr>
+<td><big>(</big>(<var>x</var>,&nbsp;<var>p</var>)&nbsp;&#8855;&nbsp;(<var>y</var>,&nbsp;<var>q</var>)<big>)</big>&nbsp;&#8855;&nbsp;(<var>z</var>,&nbsp;<var>r</var>)</td>
+<td>=&nbsp;(<var>x</var>&nbsp;+&nbsp;<var>p</var>&nbsp;<var>y</var>,&nbsp;<var>p</var>&nbsp;<var>q</var>)&nbsp;&#8855;&nbsp;(<var>z</var>,&nbsp;<var>r</var>)</td>
+<td>=&nbsp;(<var>x</var>&nbsp;+&nbsp;<var>p</var>&nbsp;<var>y</var>&nbsp;+&nbsp;<var>p</var>&nbsp;<var>q</var>&nbsp;<var>z</var>,&nbsp;<var>p</var>&nbsp;<var>q</var>&nbsp;<var>r</var>)</td>
+</tr><tr>
+<td>(<var>x</var>,&nbsp;<var>p</var>)&nbsp;&#8855;&nbsp;<big>(</big>(<var>y</var>,&nbsp;<var>q</var>)&nbsp;&#8855;&nbsp;(<var>z</var>,&nbsp;<var>r</var>)<big>)</big></td>
+<td>=&nbsp;(<var>x</var>,&nbsp;<var>p</var>)&nbsp;&#8855;&nbsp;(<var>y</var>&nbsp;+&nbsp;<var>q</var>&nbsp;<var>z</var>,&nbsp;<var>q</var>&nbsp;<var>r</var>)</td>
+</tr><tr><td></td>
+<td>=&nbsp;(<var>x</var>&nbsp;+&nbsp;<var>p</var>&nbsp;(<var>y</var>&nbsp;+&nbsp;<var>q</var>&nbsp;<var>z</var>),&nbsp;<var>p</var>&nbsp;<var>q</var>&nbsp;<var>r</var>)</td>
+<td>=&nbsp;(<var>x</var>&nbsp;+&nbsp;<var>p</var>&nbsp;<var>y</var>&nbsp;+&nbsp;<var>p</var>&nbsp;<var>q</var>&nbsp;<var>z</var>,&nbsp;<var>p</var>&nbsp;<var>q</var>&nbsp;<var>r</var>)</td>
+</tr></tbody></table></blockquote>
+
+<p>The following diagram illustrates how this would work
+for the array &lt;1, 1, 1, 0, 1, 1, 0, 1&gt; on four processors.</p>
+
+<center><img src="Introduction%20to%20parallel%20&amp;%20distributed%20algorithms_files/count1s.png" height="175" width="480"></center>
+
+<p>(A completely different approach to this problem &#8212; still using the 
+parallel scan algorithm we've studied &#8212; is to change each 0 in the array
+ to be its index within the array, while we change each 1 to be the 
+array's length. Then we could use parallel scan to find the minimum 
+element among these elements.)</p>
+
+<h3><a class="sec" name="2.4">2.4.</a> Evaluating a polynomial</h3>
+
+<p>Here's another application that's not immediately obvious.
+Suppose we're given an array <var>a</var> of coefficients and a
+number <var>x</var>, and we want to compute the value of</p>
+
+<center>
+<var>a</var><sub><small>0</small></sub>
+&#8901; <var>x</var><sup><var>n</var>&nbsp;&#8722;&nbsp;1</sup> +
+<var>a</var><sub><small>1</small></sub>
+&#8901; <var>x</var><sup><var>n</var>&nbsp;&#8722;&nbsp;2</sup> +
+&#8230; +
+<var>a</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;2</small></sub>
+&#8901; <var>x</var> +
+<var>a</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;1</small></sub>.
+</center>
+
+<p>Again, the solution isn't easy; we end up having to change each array element
+into a pair. In this case, each element
+<var>a</var><sub><small><var>i</var></small></sub> will become the pair
+(<var>a</var><sub><small><var>i</var></small></sub>,&nbsp;<var>x</var>).
+We then define our operator &#8855; as follows.</p>
+
+<center>
+(<var>p</var>, <var>y</var>) &#8855; (<var>q</var>, <var>z</var>)
+= (<var>p</var>&nbsp;<var>z</var> + <var>q</var>, <var>y</var>&nbsp;<var>z</var>)
+</center>
+
+<p>Where does this come from? It's a little difficult to understand at first, but
+each such pair is meant to summarize the essential knowledge needed for a segment
+of the array. This segment itself represents a polynomial. The first number in the
+pair is the value of the segment's polynomial evaluated for <var>x</var>, while
+the second is <var>x</var><sup><small><var>n</var></small></sup>, where
+<var>n</var> is the length of the represented segment.</p>
+
+<p>But before we imagine using our parallel scan algorithm, we need first to
+confirm that the operator is indeed associative.</p>
+
+<blockquote><table><tbody><tr>
+<td><big>(</big>(<var>a</var>,&nbsp;<var>x</var>)&nbsp;&#8855;&nbsp;(<var>b</var>,&nbsp;<var>y</var>)<big>)</big>&nbsp;&#8855;&nbsp;(<var>c</var>,&nbsp;<var>z</var>)</td>
+<td>=&nbsp;(<var>a</var>&nbsp;<var>y</var>&nbsp;+&nbsp;<var>b</var>,&nbsp;<var>x</var>&nbsp;<var>y</var>)&nbsp;&#8855;&nbsp;(<var>c</var>,&nbsp;<var>z</var>)</td>
+</tr><tr><td></td>
+<td>=&nbsp;((<var>a</var>&nbsp;<var>y</var>&nbsp;+&nbsp;<var>b</var>)&nbsp;<var>z</var>&nbsp;+&nbsp;<var>c</var>,&nbsp;<var>x</var>&nbsp;<var>y</var>&nbsp;<var>z</var>)</td>
+<td>=&nbsp;(<var>a</var>&nbsp;<var>y</var>&nbsp;<var>z</var>&nbsp;+&nbsp;<var>b</var>&nbsp;<var>z</var>&nbsp;+&nbsp;<var>c</var>,&nbsp;<var>x</var>&nbsp;<var>y</var>&nbsp;<var>z</var>)</td>
+</tr><tr>
+<td>(<var>a</var>,&nbsp;<var>x</var>)&nbsp;&#8855;&nbsp;<big>(</big>(<var>b</var>,&nbsp;<var>y</var>)&nbsp;&#8855;&nbsp;(<var>c</var>,&nbsp;<var>z</var>)<big>)</big></td>
+<td>=&nbsp;(<var>a</var>,&nbsp;<var>x</var>)&nbsp;&#8855;&nbsp;(<var>b</var>&nbsp;<var>z</var>&nbsp;+&nbsp;<var>c</var>,&nbsp;<var>y</var>&nbsp;<var>z</var>)</td>
+<td>=&nbsp;(<var>a</var>&nbsp;<var>y</var>&nbsp;<var>z</var>&nbsp;+&nbsp;<var>b</var>&nbsp;<var>z</var>&nbsp;+&nbsp;<var>c</var>,&nbsp;<var>x</var>&nbsp;<var>y</var>&nbsp;<var>z</var>)</td>
+</tr></tbody></table></blockquote>
+
+
+<p>Both associations yield the same result, so the operator is 
+associative. Let's look at an example to see it at work. Suppose we want
+ to evaluate the polynomial
+<var>x</var>³&nbsp;+&nbsp;<var>x</var>²&nbsp;+&nbsp;1 when <var>x</var> is 2.
+In this case, the coefficients of the polynomial can be represented using the array
+&lt;1,&nbsp;1,&nbsp;0,&nbsp;1&gt;. The first step of our algorithm is to convert
+this into an array of pairs.</p>
+
+<center>
+(1, 2), (1, 2), (0, 2), (1, 2)
+</center>
+
+<p>We can then repeatedly apply our &#8855; operator to arrive at our result.</p>
+
+<blockquote><table><tbody>
+<tr><td colspan="3">(1, 2) &#8855; (1, 2) &#8855; (0, 2) &#8855; (1, 2)</td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;</td>
+<td>=</td><td align="center">(1 &#8901; 2 + 1, 2 &#8901; 2) &#8855; (0, 2) &#8855; (1, 2)</td>
+<td>=</td><td align="center">(3, 4) &#8855; (0, 2) &#8855; (1, 2)</td></tr>
+<tr><td></td><td>=</td><td align="center">(3 &#8901; 2 + 0, 4 &#8901; 2) &#8855; (1, 2)</td>
+<td>=</td><td align="center">(6, 8) &#8855; (1, 2)</td></tr>
+<tr><td></td><td>=</td><td align="center">(6 &#8901; 2 + 1, 8 &#8901; 2)</td>
+<td>=</td><td align="center">(13, 16)</td></tr>
+</tbody></table></blockquote>
+
+<p>So we end up with (13,&nbsp;16), which has the value we wanted to 
+compute &#8212; 13 &#8212; as its first element: 2³&nbsp;+&nbsp;2²&nbsp;+&nbsp;1
+=&nbsp;13.</p>
+
+<p>In our computation above, we proceeded in left-to-right order as 
+would be done on a single processor. In fact, though, our parallel scan 
+algorithm would combine the first two elements and the second two 
+elements in parallel:</p>
+
+<blockquote><table><tbody>
+<tr><td align="center">(1, 2) &#8855; (1, 2)</td>
+<td>=</td><td align="center">(1 &#8901; 2 + 1, 2 &#8901; 2)</td>
+<td>=</td><td align="center">(3, 4)</td></tr>
+<tr><td align="center">(0, 2) &#8855; (1, 2)</td>
+<td>=</td><td align="center">(0 &#8901; 2 + 1, 2 &#8901; 2)</td>
+<td>=</td><td align="center">(1, 4)</td></tr>
+</tbody></table></blockquote>
+
+<p>And then it would combine these two results to arrive at
+(3&nbsp;&#8901;&nbsp;4&nbsp;+&nbsp;1,&nbsp;4&nbsp;&#8901;&nbsp;4)
+=&nbsp;(13,&nbsp;16).</p>
+
+
+<h2><a class="sec" name="3">3.</a> Parallel prefix scan</h2>
+
+<p>Now we consider a slightly different problem: Given an array
+&lt;<var>a</var><sub><small>0</small></sub>,
+<var>a</var><sub><small>1</small></sub>,
+<var>a</var><sub><small>2</small></sub>,
+&#8230;,
+<var>a</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;1</small></sub>&gt;,
+we want to compute the sum of every possible prefix of the
+array:</p>
+
+<center>
+&lt;<var>a</var><sub><small>0</small></sub>,
+<var>a</var><sub><small>0</small></sub> +
+<var>a</var><sub><small>1</small></sub>,
+<var>a</var><sub><small>0</small></sub> +
+<var>a</var><sub><small>1</small></sub> +
+<var>a</var><sub><small>2</small></sub>,
+&#8230;,
+<var>a</var><sub><small>0</small></sub> +
+<var>a</var><sub><small>1</small></sub> +
+<var>a</var><sub><small>2</small></sub> + &#8230; +
+<var>a</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;1</small></sub>&gt;
+</center>
+
+<h3><a class="sec" name="3.1">3.1.</a> The prefix scan algorithm</h3>
+
+<p>This is easy enough to do on a single processor with code that takes <var>O</var>(<var>n</var>) time.</p>
+
+<blockquote><code class="java">total&nbsp;=&nbsp;array[<tt>0</tt>];<br>
+<b>for</b>(i&nbsp;=&nbsp;<tt>1</tt>;&nbsp;i&nbsp;&lt;&nbsp;array.length;&nbsp;i++)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;total&nbsp;+=&nbsp;array[i];<br>
+&nbsp;&nbsp;&nbsp;&nbsp;array[i]&nbsp;=&nbsp;total;<br>
+}</code></blockquote>
+
+<p>With <var>p</var> processors,
+we might hope to compute all prefix sums in
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;log&nbsp;<var>p</var>)
+time, since we can find the sum in that amount of time. However,
+there's not a straightforward way to adapt our earlier algorithm to
+accomplish this.
+We can begin with an overall outline, though.</p>
+
+<ol>
+
+<li><p>Each processor finds the sum of its segment.</p>
+
+<code class="java">total&nbsp;=&nbsp;segment[<tt>0</tt>];<br>
+<b>for</b>(i&nbsp;=&nbsp;<tt>1</tt>;&nbsp;i&nbsp;&lt;&nbsp;segment.length;&nbsp;i++)&nbsp;total&nbsp;+=&nbsp;segment[i];</code></li>
+
+<li><p>Somehow the processors communicate so that each processor knows 
+the sum of all segments preceding it (excluding the processor's 
+segment).
+Each processor will now call this sum <code>total</code>.</p></li>
+
+<li><p>Now each processor updates the array elements in its
+segment to hold the prefix sums.</p>
+
+<code class="java"><b>for</b>(i&nbsp;=&nbsp;<tt>0</tt>;&nbsp;i&nbsp;&lt;&nbsp;segment.length;&nbsp;i++)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;total&nbsp;+=&nbsp;segment[i];<br>
+&nbsp;&nbsp;&nbsp;&nbsp;segment[i]&nbsp;=&nbsp;total;<br>
+}</code></li>
+
+</ol>
+
+<p>If we divide the array equally among the processors, then the
+first and last steps each take
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>) time.
+The hard part is step 2, which we haven't specified exactly
+yet. We know we have each processor
+imagining a number (the total for its segment), and we want
+each processor to know the sum of all numbers imagined
+by the preceding processors. We're hoping we can perform this in
+<var>O</var>(log&nbsp;<var>p</var>) time.</p>
+
+<p>In 1990, parallel algorithms researcher Guy Blelloch
+described just such a technique.  He imagined performing the
+computation in two phases, which we'll call the <em>collect phase</em>
+and the <em>distribute phase</em>, diagrammed below. (Blelloch
+called the phases <em>up-sweep</em> and <em>down-sweep</em>;
+these names make sense if you draw the
+diagrams upside-down from what I have drawn. You then have to
+imagine time as proceeding up the page.)</p>
+
+<center><table><tbody><tr>
+    <td valign="top"><img src="Introduction%20to%20parallel%20&amp;%20distributed%20algorithms_files/prefix1.png" height="132" width="248"></td>
+    <td valign="top"><img src="Introduction%20to%20parallel%20&amp;%20distributed%20algorithms_files/prefix2.png" height="135" width="250"></td>
+</tr><tr>
+    <td align="center"><em>Collect Phase</em></td>
+    <td align="center"><em>Distribute Phase</em></td>
+</tr></tbody></table></center>
+
+<p>The collect phase is just like our parallel sum algorithm: Each 
+starts with its segment's subtotal, and we have a binary tree that
+eventually sums these subtotals together. This takes
+log<sub><small>2</small></sub>&nbsp;<var>p</var> rounds of
+communication.</p>
+
+<p>The distribute phase is more difficult. You can see that we
+start with 0, which that processor sends to its left. But the processor 
+also
+sends 55 to its right &#8212; and
+where did the 55 come from? Notice that in the collect phase's tree 55 
+is the final node's left child. Similarly, the processor receiving the 
+55 in the first
+distribution round sends that to its left, and to the right it sends 85;
+ it arrives at 85 by adding its left child from the collect phase, 30,
+onto the 55.
+At the same time, the processor that received 0 in the first
+distribution round sends 0 to its left child and 25 to its
+right; the 25 comes from adding its left child of 25 from the collect 
+phase
+to the 0 it now holds.</p>
+
+<p>While the tree may make sense, seeing exactly how to implement the
+distribute phase is a bit difficult at first. But the following diagram is quite
+helpful.</p>
+
+<center><img src="Introduction%20to%20parallel%20&amp;%20distributed%20algorithms_files/prefix-compute.png" height="190" width="292"></center>
+
+<p>The first four rows represent the collect phase, just like the parallel sum
+from <a href="#2.1">Section&nbsp;2.1</a>, except now the numbers are 
+sent to the
+right, not the left. After the collect phase is finished, the final 
+processor holds the overall total &#8212; but then it promptly replaces 108 
+with 0 before
+beginning the distribute phase. In the first round of the
+distribute phase, processors&nbsp;3 and&nbsp;7 perform something of a 
+swap:
+Each processor sends the number it ended up with from the collect phase,
+with processor&nbsp;7 adding what it receives (55) to what it previously
+ held (0)
+to arrive at 55; processor&nbsp;3 simply updates what it remembers to 
+its received
+value, 0.
+In the next round, we perform the same sort of modified swap between
+processors&nbsp;1 and&nbsp;3 and between processors&nbsp;5 and&nbsp;7;
+in each case, the first processor in the pair simply accepts its 
+received value,
+while the second processor adds its received value to what it held 
+previously.
+By the last round, when all processors participate in the swap, each 
+processor ends up with the sum of the numbers preceding it at the 
+beginning.</p>
+
+<p>You may well object that this is fine as long as the number of processors
+is a power of 2, but it doesn't address other numbers of processors. Indeed, it
+doesn't work unless <var>p</var> is a power of 2. If it isn't, then one simple solution is simply to round <var>p</var> down to the highest
+power of 2. There has to be a power of 2 between <span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">2</span> and <var>p</var>, so we'll still end up using at least half of the available processors.
+In big-O bounds, we won't lose anything: Our algorithm takes
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;log&nbsp;<var>p</var>) time when <var>p</var> is a power of 2; if we halve <var>p</var> (which
+would be the case where we lose the most processors), we end up at
+<var>O</var><big>(</big><span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den">(<span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">2</span>)</span>&nbsp;+&nbsp;log&nbsp;(<span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">2</span>)<big>)</big>
+=&nbsp;<var>O</var>(2&nbsp;<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;log&nbsp;<var>p</var>&nbsp;&#8722;&nbsp;log&nbsp;2)
+=&nbsp;<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;log&nbsp;<var>p</var>) just as before.
+It's a bit frustrating to simply ignore up to half of our processors, but most often
+it wouldn't be worth complicating our program, increasing the likelihood of errors
+and costing programmer time for the sake of a constant factor of 2.</p>
+
+<p>And that brings us to actually writing some code implementing our algorithm.</p>
+
+<blockquote><code class="java"><i>//&nbsp;Note:&nbsp;Number&nbsp;of&nbsp;processors&nbsp;must&nbsp;be&nbsp;power&nbsp;of&nbsp;2&nbsp;for&nbsp;this&nbsp;to&nbsp;work&nbsp;correctly.<br>
+<br>
+//&nbsp;find&nbsp;sum&nbsp;of&nbsp;this&nbsp;processor's&nbsp;segment</i><br>
+total&nbsp;=&nbsp;segment[<tt>0</tt>];<br>
+<b>for</b>(i&nbsp;=&nbsp;<tt>1</tt>;&nbsp;i&nbsp;&lt;&nbsp;segment.length;&nbsp;i++)&nbsp;total&nbsp;+=&nbsp;segment[i];<br>
+<br>
+<i>//&nbsp;perform&nbsp;collect&nbsp;phase</i><br>
+<b>for</b>(k&nbsp;=&nbsp;<tt>1</tt>;&nbsp;k&nbsp;&lt;&nbsp;procs;&nbsp;k&nbsp;*=&nbsp;<tt>2</tt>)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>if</b>((pid&nbsp;&amp;&nbsp;k)&nbsp;==&nbsp;<tt>0</tt>)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;send(pid&nbsp;+&nbsp;k,&nbsp;total);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>break</b>;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;<b>else</b>&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;total&nbsp;=&nbsp;receive(pid&nbsp;-&nbsp;k)&nbsp;+&nbsp;total;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+}<br>
+<br>
+<i>//&nbsp;perform&nbsp;distribute&nbsp;phase</i><br>
+<b>if</b>(pid&nbsp;==&nbsp;procs&nbsp;-&nbsp;<tt>1</tt>)&nbsp;total&nbsp;=&nbsp;<tt>0</tt>;&nbsp;&nbsp;<i>//&nbsp;reset&nbsp;last&nbsp;processor's&nbsp;subtotal&nbsp;to&nbsp;0</i><br>
+<b>if</b>(k&nbsp;&gt;=&nbsp;procs)&nbsp;k&nbsp;/=&nbsp;<tt>2</tt>;<br>
+<b>while</b>(k&nbsp;&gt;&nbsp;<tt>0</tt>)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>if</b>((pid&nbsp;&amp;&nbsp;k)&nbsp;==&nbsp;<tt>0</tt>)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;send(pid&nbsp;+&nbsp;k,&nbsp;total);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;total&nbsp;=&nbsp;receive(pid&nbsp;+&nbsp;k);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;<b>else</b>&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>int</b>&nbsp;t&nbsp;=&nbsp;receive(pid&nbsp;-&nbsp;k);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;send(pid&nbsp;-&nbsp;k,&nbsp;total);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;total&nbsp;=&nbsp;t&nbsp;+&nbsp;total;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;k&nbsp;/=&nbsp;<tt>2</tt>;<br>
+}<br>
+<br>
+<i>//&nbsp;update&nbsp;array&nbsp;to&nbsp;have&nbsp;the&nbsp;prefix&nbsp;sums</i><br>
+<b>for</b>(i&nbsp;=&nbsp;<tt>0</tt>;&nbsp;i&nbsp;&lt;&nbsp;segment.length;&nbsp;i++)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;total&nbsp;+=&nbsp;segment[i];<br>
+&nbsp;&nbsp;&nbsp;&nbsp;segment[i]&nbsp;=&nbsp;total;<br>
+}</code></blockquote>
+
+<h3><a class="sec" name="3.2">3.2.</a> Filtering an array</h3>
+
+<p>Why would we ever want to find the sum for all prefixes of an array? 
+This problem isn't quite as intuitive as wanting just the overall sum. 
+But the algorithm still proves useful for several
+applications. One interesting application is filtering an array so that 
+all
+elements satisfying a particular property are at its
+beginning.  Below is code accomplishing this on a non-parallel machine, 
+based on a pre-existing method named <code>shouldKeep</code> for determining whether a particular number satisfies the desired property.</p>
+
+<blockquote><code class="java"><b>int</b>&nbsp;numKept&nbsp;=&nbsp;<tt>0</tt>;<br>
+<b>for</b>(<b>int</b>&nbsp;i&nbsp;=&nbsp;<tt>0</tt>;&nbsp;i&nbsp;&lt;&nbsp;arrayLength;&nbsp;i++)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>if</b>(shouldKeep(array[i]))&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;array[numKept]&nbsp;=&nbsp;array[i];<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;numKept++;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+}</code></blockquote>
+
+<p>One example where we want to do this is during the pivot step
+of Quicksort: After selecting a pivot element, we want
+to move all elements that are less than this selected pivot to the
+beginning of the array (and all elements greater than the pivot to
+the end &#8212; but that is basically the same problem).</p>
+
+<p>To accomplish our filtering, we first create another array
+where each entry is 1 if <code>shouldKeep</code> says to keep the
+corresponding element of the original array and 0 otherwise.
+Then we compute all prefix sums of this array. For each element that
+<code>shouldKeep</code> says to keep, the corresponding prefix
+sum indicates where it should be placed into the new array; so
+finally we can just place each kept number into the indicated
+index (minus 1).</p>
+
+<p>For example, suppose we want to keep only the numbers ending
+in 3 or 7 in the array 2, 3, 5, 7, 11, 13, 17, 19.
+We compute the following values.</p>
+
+<center><table><tbody>
+<tr><td><var>input</var>:</td>
+    <td align="right">&nbsp;2,</td>
+    <td align="right">&nbsp;3,</td>
+    <td align="right">&nbsp;5,</td>
+    <td align="right">&nbsp;7,</td>
+    <td align="right">11,</td>
+    <td align="right">13,</td>
+    <td align="right">17,</td>
+    <td align="right">19</td></tr>
+<tr><td><var>keep</var>:</td>
+    <td align="right">0,</td>
+    <td align="right">1,</td>
+    <td align="right">0,</td>
+    <td align="right">1,</td>
+    <td align="right">0,</td>
+    <td align="right">1,</td>
+    <td align="right">1,</td>
+    <td align="right">0</td></tr>
+<tr><td><var>prefix</var>:</td>
+    <td align="right">0,</td>
+    <td align="right">1,</td>
+    <td align="right">1,</td>
+    <td align="right">2,</td>
+    <td align="right">2,</td>
+    <td align="right">3,</td>
+    <td align="right">4,</td>
+    <td align="right">4</td></tr>
+<tr><td><var>result</var>:</td>
+    <td align="right">3,</td>
+    <td align="right">7,</td>
+    <td align="right">13,</td>
+    <td align="right">17&#8201;</td></tr>
+</tbody></table></center>
+
+<p>The <var>keep</var> array is the result of testing whether
+each number ends in either 3 or 7.
+The <var>prefix</var> array holds the sum of each prefix of this
+array.
+And to compute <var>result</var>, we take each entry
+<var>input</var><sub><small><var>i</var></small></sub>
+where <code>shouldKeep</code>(<var>input</var><sub><small><var>i</var></small></sub>)
+is <em>true</em>, and we copy it into index
+<var>prefix</var><sub><small><var>i</var></small></sub>&nbsp;&#8722;&nbsp;1.</p>
+
+<h3><a class="sec" name="3.3">3.3.</a> Adding big integers</h3>
+
+<p>Just as we generalized our parallel sum algorithm from
+<a href="#2.1">Section&nbsp;2.1</a> to parallel scan in <a href="#2.2">Section&nbsp;2.2</a>, we can also generalize
+our parallel prefix sum algorithm to work with an arbitrary
+operator &#8855;. For this to work, our &#8855; operator
+must be associative &#8212; but it must also have an identity
+element: That is, there must be some value <var>a</var> for which
+<var>a</var>&nbsp;&#8855;&nbsp;<var>x</var>&nbsp;=&nbsp;<var>x</var>
+regardless of <var>x</var>. This identity is necessary for resetting
+the last processor's value as the distribute phase begins. In our work
+in <a href="#3.1">Section&nbsp;3.1</a>, we reset the last processor's
+total to 0, since we were using addition for &#8855;, and since 0 is the
+identity for addition.</p>
+
+<p>We'll see an example of using a special definition for
+&#8855; by examining how to add
+two very large integers. Each big-integer is represented using an array
+&lt;<var>a</var><sub><small>0</small></sub>,
+<var>a</var><sub><small>1</small></sub>,
+&#8230;,
+<var>a</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;2</small></sub>,
+<var>a</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;1</small></sub>&gt;
+with each array entry representing one digit:
+<var>a</var><sub><small>0</small></sub> is the big-integer's 1's
+digit,
+<var>a</var><sub><small>1</small></sub> is its 10's digit, and
+so forth. We'll represent our second big-integer to add as
+&lt;<var>b</var><sub><small>0</small></sub>,
+<var>b</var><sub><small>1</small></sub>,
+&#8230;,
+<var>b</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;2</small></sub>,
+<var>b</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;1</small></sub>&gt;
+in the same format. We want to compute the sum of these two
+big-integers.</p>
+
+<p>On a single-processor computer, we could accomplish this
+using the following code fragment.</p>
+
+<blockquote><code class="java">carry&nbsp;=&nbsp;<tt>0</tt>;<br>
+<b>for</b>(i&nbsp;=&nbsp;<tt>0</tt>;&nbsp;i&nbsp;&lt;&nbsp;n;&nbsp;i++)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sum[i]&nbsp;=&nbsp;(a[i]&nbsp;+&nbsp;b[i]&nbsp;+&nbsp;carry)&nbsp;%&nbsp;<tt>10</tt>;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;carry&nbsp;&nbsp;=&nbsp;(a[i]&nbsp;+&nbsp;b[i]&nbsp;+&nbsp;carry)&nbsp;/&nbsp;<tt>10</tt>;<br>
+}</code></blockquote>
+
+<p>Notice how this program uses the <code>carry</code> variable
+to hold a value that will be used in the next iteration. It's
+this <code>carry</code> variable that makes this code difficult
+to translate into an efficient program on multiple processors.</p>
+
+<p>But here's what we can do: First, notice that our primary problem is
+determining whether each column has a <q>carry</q> for the next column.
+For determining this, we'll create a new array
+<var>c</var>, where each value is either C (for <b>c</b>arry), M
+(for <b>m</b>aybe), or N (for <b>n</b>ever). To determine entry
+<var>c</var><sub><small><var>i</var></small></sub> of this
+array, we'll compute
+<var>a</var><sub><small><var>i</var></small></sub>&nbsp;+&nbsp;<var>b</var><sub><small><var>i</var></small></sub>
+and assign <var>c</var><sub><small><var>i</var></small></sub>
+to be C if the sum is 10 or more (since in this case this column will 
+certainly carry 1 into the following column), M if the sum is 9 (since 
+this column may carry into the next column, if there is a carry from the
+ previous column), and N if it
+is below 9 (since there is no possibility that this column will carry).</p>
+
+<p>Now we'll do a parallel prefix scan on this <var>c</var>
+array with our &#8855; operator defined as in the below table.</p>
+
+<center><table class="truth" rules="groups">
+    <colgroup span="2"></colgroup><colgroup span="1">
+</colgroup><thead><tr><td><var>x</var></td><td><var>y</var></td><td><var>x</var>&nbsp;&#8855;&nbsp;<var>y</var></td></tr></thead><tbody>
+<tr><td>N</td><td>N</td><td>N</td></tr>
+<tr><td>N</td><td>M</td><td>N</td></tr>
+<tr><td>N</td><td>C</td><td>C</td></tr>
+<tr><td>M</td><td>N</td><td>N</td></tr>
+<tr><td>M</td><td>M</td><td>M</td></tr>
+<tr><td>M</td><td>C</td><td>C</td></tr>
+<tr><td>C</td><td>N</td><td>N</td></tr>
+<tr><td>C</td><td>M</td><td>C</td></tr>
+<tr><td>C</td><td>C</td><td>C</td></tr>
+</tbody></table></center>
+
+<p>More compactly,
+<var>x</var>&nbsp;&#8855;&nbsp;<var>y</var> is <var>y</var> if
+<var>y</var> is either C or N, but it is <var>x</var> if
+<var>y</var> is M.
+We can confirm that this &#8855; operator is
+associative by simply listing all 27 possible combinations
+for three variables <var>x</var>, <var>y</var>, and <var>z</var>
+and confirming that for each of them,
+(<var>x</var>&nbsp;&#8855;&nbsp;<var>y</var>)&nbsp;&#8855;&nbsp;<var>z</var>
+matches
+<var>x</var>&nbsp;&#8855;&nbsp;(<var>y</var>&nbsp;&#8855;&nbsp;<var>z</var>).</p>
+
+<center><table><tbody><tr>
+<td><table class="truth" rules="groups">
+    <colgroup span="3"></colgroup><colgroup span="2">
+</colgroup><thead><tr>
+<td><var>x</var></td>
+<td><var>y</var></td>
+<td><var>z</var></td>
+<td>(<var>x</var>&nbsp;&#8855;&nbsp;<var>y</var>)&nbsp;&#8855;&nbsp;<var>z</var></td>
+<td><var>x</var>&nbsp;&#8855;&nbsp;(<var>y</var>&nbsp;&#8855;&nbsp;<var>z</var>)</td>
+</tr></thead><tbody>
+<tr><td>N</td><td>N</td><td>N</td><td>N</td><td>N</td></tr>
+<tr><td>N</td><td>N</td><td>M</td><td>N</td><td>N</td></tr>
+<tr><td>N</td><td>N</td><td>C</td><td>C</td><td>C</td></tr>
+<tr><td>N</td><td>M</td><td>N</td><td>N</td><td>N</td></tr>
+<tr><td>N</td><td>M</td><td>M</td><td>N</td><td>N</td></tr>
+<tr><td>N</td><td>M</td><td>C</td><td>C</td><td>C</td></tr>
+<tr><td>N</td><td>C</td><td>N</td><td>N</td><td>N</td></tr>
+<tr><td>N</td><td>C</td><td>M</td><td>C</td><td>C</td></tr>
+<tr><td>N</td><td>C</td><td>C</td><td>C</td><td>C</td></tr>
+</tbody></table></td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td><table class="truth" rules="groups">
+    <colgroup span="3"></colgroup><colgroup span="2">
+</colgroup><thead><tr>
+<td><var>x</var></td>
+<td><var>y</var></td>
+<td><var>z</var></td>
+<td>(<var>x</var>&nbsp;&#8855;&nbsp;<var>y</var>)&nbsp;&#8855;&nbsp;<var>z</var></td>
+<td><var>x</var>&nbsp;&#8855;&nbsp;(<var>y</var>&nbsp;&#8855;&nbsp;<var>z</var>)</td>
+</tr></thead><tbody>
+<tr><td>M</td><td>N</td><td>N</td><td>N</td><td>N</td></tr>
+<tr><td>M</td><td>N</td><td>M</td><td>N</td><td>N</td></tr>
+<tr><td>M</td><td>N</td><td>C</td><td>C</td><td>C</td></tr>
+<tr><td>M</td><td>M</td><td>N</td><td>N</td><td>N</td></tr>
+<tr><td>M</td><td>M</td><td>M</td><td>M</td><td>M</td></tr>
+<tr><td>M</td><td>M</td><td>C</td><td>C</td><td>C</td></tr>
+<tr><td>M</td><td>C</td><td>N</td><td>N</td><td>N</td></tr>
+<tr><td>M</td><td>C</td><td>M</td><td>C</td><td>C</td></tr>
+<tr><td>M</td><td>C</td><td>C</td><td>C</td><td>C</td></tr>
+</tbody></table></td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td><table class="truth" rules="groups">
+    <colgroup span="3"></colgroup><colgroup span="2">
+</colgroup><thead><tr>
+<td><var>x</var></td>
+<td><var>y</var></td>
+<td><var>z</var></td>
+<td>(<var>x</var>&nbsp;&#8855;&nbsp;<var>y</var>)&nbsp;&#8855;&nbsp;<var>z</var></td>
+<td><var>x</var>&nbsp;&#8855;&nbsp;(<var>y</var>&nbsp;&#8855;&nbsp;<var>z</var>)</td>
+</tr></thead><tbody>
+<tr><td>C</td><td>N</td><td>N</td><td>N</td><td>N</td></tr>
+<tr><td>C</td><td>N</td><td>M</td><td>N</td><td>N</td></tr>
+<tr><td>C</td><td>N</td><td>C</td><td>C</td><td>C</td></tr>
+<tr><td>C</td><td>M</td><td>N</td><td>N</td><td>N</td></tr>
+<tr><td>C</td><td>M</td><td>M</td><td>C</td><td>C</td></tr>
+<tr><td>C</td><td>M</td><td>C</td><td>C</td><td>C</td></tr>
+<tr><td>C</td><td>C</td><td>N</td><td>N</td><td>N</td></tr>
+<tr><td>C</td><td>C</td><td>M</td><td>C</td><td>C</td></tr>
+<tr><td>C</td><td>C</td><td>C</td><td>C</td><td>C</td></tr>
+</tbody></table></td>
+</tr></tbody></table></center>
+
+<p>Moreover, we can see this operator has an identity because
+M&nbsp;&#8855;&nbsp;<var>x</var> is <var>x</var> regardless of
+<var>x</var>'s value. Since our &#8855; operator is associative
+and has an identity, we can legimately use it for our prefix
+scan algorithm.</p>
+
+<p>Let's see an example of how this might work. Suppose we want to add 
+13579 and 68123. These two five-digit numbers are represented with the 
+arrays &lt;9,7,5,3,1&gt; and &lt;3,2,1,8,6&gt;. The steps we undertake 
+to compute the sum are summarized in the table below.</p>
+
+<blockquote><table class="arrays"><tbody>
+<tr><th><var>a</var>:</th><td>&lt;</td><td>9,</td><td>7,</td><td>5,</td><td>3,</td><td>1&gt;</td></tr>
+<tr><th><var>b</var>:</th><td>&lt;</td><td>3,</td><td>2,</td><td>1,</td><td>8,</td><td>6&gt;</td></tr>
+<tr><th><var>c</var>:</th><td>&lt;</td><td>C,</td><td>M,</td><td>N,</td><td>C,</td><td>N&gt;</td></tr>
+<tr><th>prefix scan:</th><td>&lt;</td><td>C,</td><td>C,</td><td>N,</td><td>C,</td><td>N&gt;</td></tr>
+<tr><th>carries:</th><td>&lt;</td><td>0,</td><td>1,</td><td>1,</td><td>0,</td><td>1&gt;</td></tr>
+<tr><th>sum:</th><td>&lt;</td><td>2,</td><td>0,</td><td>7,</td><td>1,</td><td>8&gt;</td></tr>
+</tbody></table></blockquote>
+
+<p>We first compute the array <var>c</var> of C/M/N values based
+on summing corresponding columns from <var>a</var> and
+<var>b</var>; each column here is computed independently of the
+ohers, so <var>c</var> can be determined completely in parallel. We end 
+up with &lt;C,M,N,C,N&gt;. Then we apply the parallel prefix scan 
+algorithm on <var>c</var> using our &#8855; operator, arriving at &lt;C,C,N,C,N&gt;. Each entry <var>c</var><sub><small><var>i</var></small></sub> of this prefix scan indicates whether that column would carry into the <em>following</em> column. Thus, the carry into column <var>i</var>, which we term <var>carry</var><sub><small><var>i</var></small></sub>, will be 1 if entry <var>c</var><sub><small><var>i</var>&nbsp;&#8722;&nbsp;1</small></sub> exists and is C, and otherwise <var>carry</var><sub><small><var>i</var></small></sub> will be 1. In our example, the <var>carry</var> array would be &lt;0,1,1,0,1&gt;. Our final step is to add corresponding columns of <var>a</var>, <var>b</var>, and <var>carry</var>, retaining only the 1's digit of each sum. In our example, we end up with &lt;2,0,7,1,8&gt;, corresponding to the result 81702.</p>
+
+<h2><a class="sec" name="4">4.</a> Sorting</h2>
+
+<p>So far we have been working with very elementary problems &#8212; problems 
+where the single-processor solution is so straightforward that in 
+classical algorithms we rarely discuss the problems at all. Now we'll 
+turn to one of the most heavily studied classical problems of all: 
+sorting. How can we sort an array of numbers quickly when we have many 
+processors?</p>
+
+<p>We know we can sort an <var>n</var>-element array on a single processor in <var>O</var>(<var>n</var>&nbsp;log&nbsp;<var>n</var>) time. With <var>p</var> processors, then, we would hope to find an algorithm that takes <var>O</var>(<span class="num">(<var>n</var>&nbsp;log&nbsp;<var>n</var>)</span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>) time. We won't quite achieve that here, but instead we'll look at an algorithm that takes <var>O</var><big>(</big>(<span class="num"><var>n</var>&nbsp;(<small>(</small>log&nbsp;<var>p</var><small>)</small>²&nbsp;+&nbsp;log&nbsp;<var>n</var>)</span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)<big>)</big>
+ time. Our algorithm will be based on the mergesort algorithm.  It's 
+natural to look at mergesort, because it's a simple divide-and-conquer 
+algorithm. Divide-and-conquer algorithms are particularly attractive for
+ multiprocessor systems: After splitting the problem into subproblems, 
+we split our processors to process each subproblem simultaneously, and 
+then we need a way to use all our processors combine the subproblems' 
+solutions together.</p>
+
+<p>(Incidentally, there <em>is</em> a <var>O</var>(<span class="num">(<var>n</var>&nbsp;log&nbsp;<var>n</var>)</span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)
+ algorithm for parallel sorting, developed in 1983 by Ajtai, Komlós, and
+ Szemerédi and subsequently simplified by M.&nbsp;S.&nbsp;Paterson in 
+1990. Even the simplified version, though, is more complex than what we 
+want to study here. What's more, the multiplicative constant hidden by 
+the big-O notation turns out to be quite large &#8212; large enough to make it
+ less efficient in the real world than the algorithm we'll study, which 
+was developed by Ken Batcher in 1968.)</p>
+
+<h3><a class="sec" name="4.1">4.1.</a> Merging</h3>
+
+<p>Our first problem is determining how to merge two arrays of similar 
+length. For the moment, we'll imagine that we have as many processors as
+ we have array elements. Below is a diagram of how to merge two 
+segments, each with 8 elements.</p>
+
+<blockquote>
+<img src="Introduction%20to%20parallel%20&amp;%20distributed%20algorithms_files/merge16.png" height="180" width="480">
+</blockquote>
+
+<p>The first round here consists of comparing the elements of each 
+sorted half with the element at the same index in the other sorted half;
+ and for each pair, we will swap the numbers if the second number is 
+less than the first. Thus, the 21 and 20 are compared, and since 20 is 
+less, it is moved into the processor&nbsp;0, while the 21 moves up to 
+processor&nbsp;8. At the same time, processors&nbsp;1 and&nbsp;9 compare
+ 24 and 22, and since they are out of order, these numbers are swapped. 
+Note, though, that the 28 and 31 are compared but not moved, since the 
+lesser is already at the smaller-index processor.</p>
+
+<p>The second round of the above diagram involves several comparisons 
+between processors that are 4 apart. And the third round involves 
+comparisons between processors that are 2 apart, and finally there are 
+comparisons between adjacent processors.</p>
+
+<p>We've illustrated the process with a single number for each
+processor. In fact, each processor will actually have a whole segment of
+ data. Where our above diagram indicates that two processors should 
+compare numbers, what will actually happen is that the two processors 
+will communicate their respective segments to each other and each will 
+merge the two segments together. The lower-index processor keeps the 
+lower half of the merged result, while the upper-index processor keeps 
+the upper half.</p>
+
+<p>Below is some pseudocode showing how this might be implemented. In 
+order to facilitate its usage in mergesort later, this pseudocode is 
+written imagining that only a subset of the processors contain the two 
+arrays to be merged.</p>
+
+<blockquote><code class="java"><b>void</b>&nbsp;merge(<b>int</b>&nbsp;firstPid,&nbsp;<b>int</b>&nbsp;numProcs)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<i>//&nbsp;Note:&nbsp;numProcs&nbsp;must&nbsp;be&nbsp;a&nbsp;power&nbsp;of&nbsp;2,&nbsp;and&nbsp;firstPid&nbsp;must&nbsp;be&nbsp;a&nbsp;multiple&nbsp;of<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;numProcs.&nbsp;The&nbsp;numProcs&nbsp;/&nbsp;2&nbsp;processors&nbsp;starting&nbsp;from&nbsp;firstPid&nbsp;should&nbsp;hold&nbsp;one<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;sorted&nbsp;array,&nbsp;while&nbsp;the&nbsp;next&nbsp;numProcs&nbsp;/&nbsp;2&nbsp;processors&nbsp;hold&nbsp;the&nbsp;other.</i><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>int</b>&nbsp;d&nbsp;=&nbsp;numProcs&nbsp;/&nbsp;<tt>2</tt>;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>if</b>(pid&nbsp;&lt;&nbsp;firstPid&nbsp;+&nbsp;d)&nbsp;mergeFirst(pid&nbsp;+&nbsp;d);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>else</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mergeSecond(pid&nbsp;-&nbsp;d);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>while</b>(d&nbsp;&gt;=&nbsp;<tt>2</tt>)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d&nbsp;/=&nbsp;<tt>2</tt>;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>if</b>((pid&nbsp;&amp;&nbsp;d)&nbsp;!=&nbsp;<tt>0</tt>)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>if</b>(pid&nbsp;+&nbsp;d&nbsp;&lt;&nbsp;firstPid&nbsp;+&nbsp;numProcs)&nbsp;mergeFirst(pid&nbsp;+&nbsp;d);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;<b>else</b>&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>if</b>(pid&nbsp;-&nbsp;d&nbsp;&gt;=&nbsp;firstPid)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mergeSecond(pid&nbsp;-&nbsp;d);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+}<br>
+<br>
+<b>void</b>&nbsp;mergeFirst(<b>int</b>&nbsp;otherPid)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;send(otherPid,&nbsp;segment);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>//&nbsp;send&nbsp;my&nbsp;segment&nbsp;to&nbsp;partner</i><br>
+&nbsp;&nbsp;&nbsp;&nbsp;otherSegment&nbsp;=&nbsp;receive(otherPid);&nbsp;&nbsp;<i>//&nbsp;receive&nbsp;partner's&nbsp;whole&nbsp;segment</i><br>
+&nbsp;&nbsp;&nbsp;&nbsp;merge&nbsp;segment&nbsp;and&nbsp;otherSegment,&nbsp;keeping&nbsp;the&nbsp;first&nbsp;half&nbsp;in&nbsp;my&nbsp;segment&nbsp;variable;<br>
+}<br>
+<br>
+<b>void</b>&nbsp;mergeSecond(<b>int</b>&nbsp;otherPid)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;otherSegment&nbsp;=&nbsp;receive(otherPid);&nbsp;&nbsp;<i>//&nbsp;receive&nbsp;partner's&nbsp;whole&nbsp;segment</i><br>
+&nbsp;&nbsp;&nbsp;&nbsp;send(otherPid,&nbsp;segment);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>//&nbsp;send&nbsp;my&nbsp;segment&nbsp;to&nbsp;partner</i><br>
+&nbsp;&nbsp;&nbsp;&nbsp;merge&nbsp;segment&nbsp;and&nbsp;otherSegment,&nbsp;keeping&nbsp;the&nbsp;second&nbsp;half&nbsp;in&nbsp;my&nbsp;segment&nbsp;variable;<br>
+}</code></blockquote>
+
+<p>Though the algorithm may make sense enough, it isn't at all obvious 
+that it actually is guaranteed always to merge the two halves into one 
+sorted array. The argument that it works is fairly involved, and we 
+won't go into it here.</p>
+
+<p>We will, though, examine how much time the algorithm takes. Since 
+with each round the involved processors will send, receive, and merge 
+segments of length &#8968;<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&#8969;, each round of our algorithm will take <var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>) time. Because there are log<sub><small>2</small></sub>&nbsp;<var>p</var> rounds, the total time taken to merge both arrays is <var>O</var><big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;<var>p</var><big>)</big>.</p>
+
+<h3><a class="sec" name="4.2">4.2.</a> Mergesort</h3>
+
+<p>Now we know how to merge two (<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den">2</span>)-length arrays on <var>p</var> processors in <var>O</var><big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;<var>p</var><big>)</big> time. How can we use this merging algorithm to sort an array with <var>n</var> elements?</p>
+
+<p>Before we can perform any sorting, we must first sort each individual
+ processor's segment. You've studied single-processor sorting thoroughly
+ before; we might as well use the quicksort algorithm here. Each 
+processor has &#8968;<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&#8969; elements in its segment, so each processor will take
+<var>O</var><big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)<big>)</big>
+=&nbsp;<var>O</var><big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;<var>n</var><big>)</big> time. All processors perform this quicksort simultaneously.</p>
+
+<p>Now we will progressively merge sorted segments together, until the 
+entire array is one large sorted segment, as diagrammed below.</p>
+
+<blockquote>
+<img src="Introduction%20to%20parallel%20&amp;%20distributed%20algorithms_files/sort16.png" height="268" width="480">
+</blockquote>
+
+<p>This is accomplished using the following pseudocode, which uses the merge subroutine we developed in <a href="#4.1">Section&nbsp;4.1</a>.</p>
+
+<blockquote><code class="java"><b>void</b>&nbsp;mergeSort()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;perform&nbsp;quicksort&nbsp;on&nbsp;my&nbsp;segment;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>int</b>&nbsp;sortedProcs&nbsp;=&nbsp;<tt>1</tt>;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<b>while</b>(sortedProcs&nbsp;&lt;&nbsp;procs)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sortedProcs&nbsp;*=&nbsp;<tt>2</tt>;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;merge(pid&nbsp;&amp;&nbsp;~(sortedProcs&nbsp;-&nbsp;<tt>1</tt>),&nbsp;sortedProcs);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+}</code></blockquote>
+
+<p>Let's continue our speed analysis by skipping to thinking about the 
+final level of our diagram. For this last level, we have two halves of 
+the array to merge, with <var>n</var> elements between them. We've already seen that merging these halves takes <var>O</var><big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;<var>p</var><big>)</big> time. Removing the big-O notation, this means that there is some constant <var>c</var> for which the time taken is at most <var>c</var>&nbsp;<big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;<var>p</var><big>)</big>.</p>
+
+<p>Now we'll consider the next-to-last level of our diagram.
+Here, we have two merges happening simultaneously, each taking
+two sorted arrays with a total of <span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den">2</span> elements. Half of our processors are
+working on each merge, so each merge takes at most
+<var>c</var>&nbsp;<big>(</big>(<span class="num">(<var>n</var>&nbsp;/&nbsp;2)</span>&nbsp;/&nbsp;<span class="den">(<var>p</var>&nbsp;/&nbsp;2)</span>)&nbsp;log&nbsp;(<span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">2</span>)<big>)</big>
+=&nbsp;<var>c</var>&nbsp;<big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;(<span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">2</span>)<big>)</big>
+&#8804;&nbsp;<var>c</var>&nbsp;<big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;<var>p</var><big>)</big>
+time &#8212; the same bound we arrived at for the final level.
+That is the time taken for each of the two merges at this next-to-last 
+level; but since each merge is occurring simultaneously on a different 
+set of processors, it is also the total time taken for both merges.</p>
+
+<p>Similarly, at the third-from-last level, we have four simultaneous merges, each performed by <span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">4</span> processors merging two sorted arrays with a total of <span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den">4</span> elements. The time taken for each such merge is <var>c</var>&nbsp;<big>(</big>(<span class="num">(<var>n</var>&nbsp;/&nbsp;4)</span>&nbsp;/&nbsp;<span class="den">(<var>p</var>&nbsp;/&nbsp;4)</span>)&nbsp;log&nbsp;(<span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">4</span>)<big>)</big> =&nbsp;<var>c</var>&nbsp;<big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;(<span class="num"><var>p</var></span>&nbsp;/&nbsp;<span class="den">4</span>)<big>)</big> &#8804;&nbsp;<var>c</var>&nbsp;<big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;<var>p</var><big>)</big>.
+ Again, because the merges occur simultaneously on different sets of 
+processors, this is also the total time taken for this level of our 
+diagram.</p>
+
+<p>What we've seen is that for each of the last three levels of the diagram, the time taken is at most <var>c</var><big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;<var>p</var><big>)</big>. Identical arguments will work for all other levels of the diagram except the first. There are log<sub><small>2</small></sub>&nbsp;<var>p</var>
+ such levels, each being performed after the previous one is complete. 
+Thus the total time taken for all levels but the first is at most <big>(</big><var>c</var>&nbsp;<big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;<var>p</var><big>))</big>&nbsp;log<sub><small>2</small></sub>&nbsp;<var>p</var> =&nbsp;<var>O</var><big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;(log&nbsp;<var>p</var>)²<big>)</big>.</p>
+
+<p>We've already seen that the first level &#8212; where each
+processor independently sorts its own segment &#8212; takes <var>O</var><big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;log&nbsp;<var>n</var><big>)</big> time. Adding this in, we arrive at our total bound for mergesort of <var>O</var><big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;(<small>(</small>log&nbsp;<var>p</var><small>)</small>²&nbsp;+&nbsp;log&nbsp;<var>n</var>)<big>)</big>.</p>
+
+<h2><a class="sec" name="5">5.</a> Hardness of parallelization</h2>
+
+<p>For many problems, we know of a good single-processor algorithm, but 
+there seems to be no way to adapt the algorithm to make good use of 
+additional processors. A natural question to ask is whether there really
+ is no good way to use additional processors. After all, if we can't 
+prove that efficient parallelization is impossible, how can we know when
+ to stop trying?</p>
+
+<p>There is no known technique for addressing this question perfectly. 
+However, there is an important partial answer worth studying. This 
+answer uses complexity theory, the same field where people study the 
+class <b><var>P</var></b>, which includes problems that can be solved in polynomial time, and <b><var>NP</var></b>,
+ which includes many more problems, including many that people have 
+studied intensively for decades without finding any polynomial-time 
+solution. Some of these difficult problems within <b><var>NP</var></b> have been proven to be <em><b><var>NP</var></b>-complete</em>, which means that finding a polynomial-time algorithm for that problem would imply that <em>all</em> problems in <b><var>NP</var></b>
+ can also be solved in polynomial time. Since it's unlikely that all 
+those well-studied problems have polynomial-time algorithms, a proof 
+that a problem is <b><var>NP</var></b>-complete is tantamount to an argument that one can't hope for a polynomial-time algorithm solving it.</p>
+
+<p>To discuss parallelizability in the context of complexity
+theory, we begin by defining a new class of problems called
+<b><var>NC</var></b>. (The name is quite informal: It stand's
+for <q>Nick's Class,</q> after Nick Pippenger, a complexity
+researcher who studied some problems related to parallel
+algorithms.) This class includes all problems for which an
+algorithm can be constructed with a time bound that is polylogarithmic in <var>n</var> (i.e., <var>O</var><big>(</big>(log&nbsp;<var>n</var>)<sup><small><var>d</var></small></sup><big>)</big> for some constant <var>d</var>, where <var>n</var> is the size of the problem input) if given a number of processors polynomial in <var>n</var>.</p>
+
+<p>An example of a problem that is in <b><var>NC</var></b> is adding two big-integers together. We've seen that this problem can be solved with <var>p</var> processors in <var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;log&nbsp;<var>p</var>) time. This isn't itself polylogarithmic in <var>n</var>, but suppose we happened to have <var>n</var> processors. This is of course a polynomial number of processors, and the amount of time taken would be <var>O</var>(1&nbsp;+&nbsp;log&nbsp;<var>n</var>)
+=&nbsp;<var>O</var>(log&nbsp;<var>n</var>), which is polylogarithmic in <var>n</var>. For this reason, we know that adding big-integers is in <b><var>NC</var></b>.</p>
+
+<p>What about sorting? In <a href="#4">Section&nbsp;4</a> we saw
+an <var>O</var><big>(</big>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>)&nbsp;(<small>(</small>log&nbsp;<var>p</var><small>)</small>²&nbsp;+&nbsp;log&nbsp;<var>n</var>)<big>)</big>
+algorithm. Again, suppose the number of processors were
+<var>n</var>, which is of course a polynomial in <var>n</var>. In that case, the time taken could be simplified to <var>O</var><big>(</big>(log&nbsp;<var>n</var>)²&nbsp;+&nbsp;log&nbsp;<var>n</var><big>)</big> =&nbsp;<var>O</var><big>(</big>(log&nbsp;<var>n</var>)²<big>)</big>, which again is polylogarithmic in <var>n</var>. We can conclude that sorting is also within <b><var>NC</var></b>.</p>
+
+<p>Just as with <b><var>P</var></b> and <b><var>NP</var></b> we naturally ask what the relationship is between <b><var>P</var></b> and <b><var>NC</var></b>. One thing that is easy to see is that any problem within <b><var>NC</var></b> is also within <b><var>P</var></b>: After all, we can simulate all <var>p</var> processors on just a single processor, which ends up multiplying the time taken by <var>p</var>. But since <var>p</var> must be a polynomial in <var>n</var>
+ and we're multiplying this polynomial by a polylogarithmic time for 
+each processor, we'll end up with a polynomial amount of time.</p>
+
+<p>But what is much harder to see is whether every problem within <b><var>P</var></b> is also in <b><var>NC</var></b>
+ &#8212; that is, whether every problem that admits a polynomial-time solution
+ on a single processor can be sped up to take polylogarithmic time if we
+ were given a polynomial number of processors. Nobody has been able to 
+show one way or another whether any such problems exist. In fact, the 
+situation is quite analogous to that between <b><var>P</var></b> and <b><var>NP</var></b>: Technically, nobody has proven that there is a <b><var>P</var></b> problem that definitely is not within <b><var>NC</var></b> &#8212; but there are many <b><var>P</var></b>
+ problems for which people have worked quite hard to find 
+polylogarithmic-time algorithms using a polynomial number of processors:
+ Surely at least one of these problems isn't in <b><var>NC</var></b>!</p>
+
+<p>People have been able to show, though, that there are some problems that are <strong><b><var>P</var></b>-complete</strong>: That is, if the <b><var>P</var></b>-complete problem could be shown to be within <b><var>NC</var></b>, then in fact <em>all</em> problems within <b><var>P</var></b> lie within <b><var>NC</var></b>. (Here, we're talking about
+<b><var>P</var></b>-completeness with respect to 
+<b><var>NC</var></b>. For our purposes, this is a minor technicality; 
+it's only significant when you study some of the other complexity 
+classes below <b><var>P</var></b>.) Since many decades of research 
+indicate that the last point isn't true, we can't reasonably hope to 
+find a polylogarithmic-time solution to a <b><var>P</var></b>-complete problem.</p>
+
+<p>While we won't look rigorously at how one demonstrates <b><var>P</var></b>-completeness, we can at least look briefly at a list of some problems that have been shown to be <b><var>P</var></b>-complete.</p>
+
+<ul>
+
+<li><p>Given a circuit of AND and OR gates and the inputs into
+the circuit, compute the output of the circuit.</p></li>
+
+<li><p>Compute the preorder number for a depth-first search of a
+dag.</p></li>
+
+<li><p>Compute the maximum flow of a weighted graph.</p></li>
+
+</ul>
+
+<p>Knowing that a problem is <b><var>P</var></b>-complete doesn't really
+ mean that additional processors will never help. For instance, a 
+graph's maximum flow can be computed in <var>O</var>(<var>m</var>²&nbsp;<var>n</var>) time using the Ford-Fulkerson algorithm. (And it happens there's a more complex algorithm that takes <var>O</var>(<var>m</var>&nbsp;<var>n</var>&nbsp;log&nbsp;(<span class="num"><var>n</var>²</span>&nbsp;/&nbsp;<span class="den"><var>m</var></span>)) time.) However, with many processors, we could still hope to find an <var>O</var>(<span class="num"><var>m</var>²&nbsp;<var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;&#8730;<var>p</var>) algorithm without making any major breakthroughs in the <b><var>NC</var></b>&nbsp;=&nbsp;<b><var>P</var></b> question.</p>
+
+<p>Still, knowing about <b><var>P</var></b>-completeness gives us some 
+limits on how much we can hope for from multiple processors. Usually 
+parallel and distributed systems can provide significant speedup. But 
+not always. And, as we've seen, the algorithm providing the speedup is 
+often much less obvious than the single-processor algorithm.</p>
+
+<h2><a class="sec" name="rev"></a> Review questions</h2>
+
+<ol>
+
+<li><p>Distinguish between a <em>parallel system</em> and a
+<em>distributed system</em>.</p></li>
+
+<li><p>Without referring explicitly to our parallel sum or parallel scan algorithms, describe how a parallel-processor system with <var>p</var>
+processors can compute the minimum element of an
+<var>n</var>-element array in
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;log&nbsp;<var>p</var>)
+time. You may assume that each processor has an ID between 0 and
+<var>p</var>&nbsp;&#8722;&nbsp;1.</p></li>
+
+<li><p>Given an array
+&lt;<var>a</var><sub><small>0</small></sub>,
+<var>a</var><sub><small>1</small></sub>, &#8230;,
+<var>a</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;1</small></sub>&gt;
+and some associative operator &#8855;,
+describe what the parallel prefix scan algorithm
+computes.</p></li>
+
+<li><p><a href="#4.1">Section&nbsp;4.1</a> includes a diagram 
+illustrating the comparisons made as a 16-processor system merges two 
+8-element arrays. Draw a similar diagram demonstrating the comparisons 
+made for merging the two arrays &lt;10, 13, 14, 17&gt; and &lt;11, 12, 
+15, 16&gt;.</p></li>
+
+<li><p>What does it mean for a problem to be in the
+<b><var>NC</var></b> complexity class?
+Give an example of a problem that is
+<b><var>P</var></b>-complete and so is probably not amenable to radical
+improvements in running time using multiple processors.</p></li>
+
+<li><p>Suppose we're working on a problem where <var>n</var> is the number of
+bits in the problem input and <var>p</var> is the number of processors.
+We develop an algorithm whose time requirement is</p>
+<center>
+<var>O</var><big>(</big><span class="num"><var>n</var>²</span>/<span class="den">&#8730;<var>p</var></span>&nbsp;+&nbsp;(log&nbsp;<var>p</var>)²<big>)</big>&nbsp;.
+</center>
+<p>Can we conclude that
+this problem is in the <b><var>NC</var></b> complexity class? Explain why or
+why not.</p></li>
+
+</ol>
+
+<h2><a class="sec" name="soln"></a> Solutions to review questions</h2>
+
+<ol>
+
+<li><p>Both involve multiple processors. However, in a parallel
+system we assume that communication between processors is very
+cheap, and communication is usually through shared access to the
+same memory. But in distributed systems, we assume the
+processors are somewhat separated, without any shared memory,
+and communication occurs through passing messages across a local
+network &#8212; quite a bit more expensive than accessing shared
+memory.</p></li>
+
+<li><p>Each processor computes the minimum of its segment of the array. This takes 
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>) time.</p>
+
+<p>Now each processor whose ID is odd sends its minimum to the
+one before it, which determines which is the smaller of its segment's
+minimum and the other processor's minimum. That represents the
+minimum of both processors' segments. Since there is just one
+message being sent or received by each processor, this takes
+<var>O</var>(1) time.</p>
+
+<p>And then each processor whose ID is even but not a multiple
+of 4 sends its minimum to the multiple of 4 before it, and that
+processor determines which is the smaller of that number what what it
+thought was the minimum before. As a result, each processor with
+an ID that is a multiple of 4 will now know the smallest value
+in four processors' segments. Again, this step takes
+<var>O</var>(1) time.</p>
+
+<p>We repeat the process, each time halving the number of
+<q>active</q> processors (that is, ones that received a message
+in the last step and will continue working in the next step).
+When there is just one active processor, we stop. There will be
+&#8968;log<sub><small>2</small></sub>&nbsp;<var>p</var>&#8969;
+such rounds, each taking <var>O</var>(1) time,
+so the combination of the segments' minima takes a total of
+<var>O</var>(log&nbsp;<var>p</var>) time.</p></li>
+
+<li><p>It computes the array:
+&lt;<var>a</var><sub><small>0</small></sub>,
+<var>a</var><sub><small>0</small></sub>&nbsp;&#8855;&nbsp;<var>a</var><sub><small>1</small></sub>,
+<var>a</var><sub><small>0</small></sub>&nbsp;&#8855;&nbsp;<var>a</var><sub><small>1</small></sub>&nbsp;&#8855;&nbsp;<var>a</var><sub><small>2</small></sub>,
+&#8230;,
+<var>a</var><sub><small>0</small></sub>&nbsp;&#8855;&nbsp;<var>a</var><sub><small>1</small></sub>&nbsp;&#8855;&nbsp;<var>a</var><sub><small>2</small></sub>&nbsp;&#8855;&nbsp;&#8230;&nbsp;&#8855;&nbsp;<var>a</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;1</small></sub>&gt;.</p></li>
+
+<!-- <center><table><tbody>
+<tr><td>&lt;</td><td><var>a</var><sub><small>0</small></sub>,</td></tr>
+<tr><td></td><td><var>a</var><sub><small>0</small></sub>&nbsp;&otimes;&nbsp;<var>a</var><sub><small>1</small></sub>,</td></tr>
+<tr><td></td><td><var>a</var><sub><small>0</small></sub>&nbsp;&otimes;&nbsp;<var>a</var><sub><small>1</small></sub>&nbsp;&otimes;&nbsp;<var>a</var><sub><small>2</small></sub>,</td></tr>
+<tr><td></td><td>&hellip;,</td></tr>
+<tr><td></td><td><var>a</var><sub><small>0</small></sub>&nbsp;&otimes;&nbsp;<var>a</var><sub><small>1</small></sub>&nbsp;&otimes;&nbsp;<var>a</var><sub><small>2</small></sub>&nbsp;&otimes;&nbsp;&hellip;&nbsp;&otimes;&nbsp;<var>a</var><sub><small><var>n</var>&nbsp;&minus;&nbsp;1</small></sub></td><td>&gt;</td></tr>
+</tbody></table></center> -->
+
+<li><img style="vertical-align: text-top;" src="Introduction%20to%20parallel%20&amp;%20distributed%20algorithms_files/merge8.png" height="190" width="321"></li>
+
+<li><p>A problem is in <b><var>NC</var></b> if an algorithm for it exists
+that, given a number of processors polynomial in
+<var>n</var> (the size of the problem input), can compute the
+answer in time polylogarithmic in <var>n</var> (i.e.,
+<var>O</var><big>(</big>(log&nbsp;<var>n</var>)<sup><small><var>d</var></small></sup><big>)</big> for some
+constant <var>d</var>).</p>
+
+<p>Examples of <b><var>P</var></b>-complete problems cited in
+<a href="#5">Section&nbsp;5</a> include:</p>
+
+<ul>
+
+<li><p>Given a circuit of AND and OR gates and the inputs into
+the circuit, compute the output of the circuit.</p></li>
+
+<li><p>Compute the preorder number for a depth-first search of a
+dag.</p></li>
+
+<li><p>Compute the maximum flow of a weighted graph.</p></li>
+
+</ul></li>
+
+<li><p>Yes, it is in <b><var>NC</var></b>. After all, if we had
+<var>n</var><sup><small>4</small></sup> processors, our algorithm would take
+<var>O</var><big>(</big>(<span class="num"><var>n</var>²</span>&nbsp;/&nbsp;<span class="den">&#8730;<var>n</var><sup><small>4</small></sup></span>)&nbsp;+&nbsp;(log&nbsp;<var>n</var><sup><small>4</small></sup>)²<big>)</big>
+=&nbsp;<var>O</var><big>(</big>(<span class="num"><var>n</var>²</span>&nbsp;/&nbsp;<span class="den"><var>n</var>²</span>)&nbsp;+&nbsp;(4&nbsp;log&nbsp;<var>n</var>)²<big>)</big>
+=&nbsp;<var>O</var><big>(</big>1&nbsp;+&nbsp;16&nbsp;(log&nbsp;<var>n</var>)²<big>)</big>
+=&nbsp;<var>O</var><big>(</big>(log&nbsp;<var>n</var>)²<big>)</big>
+time. The number of processors in this case would be polynomial, while the time taken would be polylogarithmic, as required for <b><var>NC</var></b>.</p></li>
+
+</ol>
+
+<h2><a class="sec" name="ex"></a> Exercises</h2>
+
+<ol start="7">
+
+<li><p>At the end of <a href="#2.1">Section&nbsp;2.1</a> we saw some code that performs a parallel scan in <var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;log&nbsp;<var>p</var>) time. That code was written using the message-passing methods described in <a href="#1.2">Section&nbsp;1.2</a>. Adapt the code to instead fit into a shared-memory system of <a href="#1.1">Section&nbsp;1.1</a>. For synchronization, you should assume that there is an array named <code>signals</code> containing <var>p</var> objects; each object supports the following two methods.</p>
+
+<dl>
+
+<dt><code class="java"><b>void</b> set()</code></dt>
+<dd><p>Marks this object as being <q>set.</q> The object defaults to being <q>unset.</q>. Setting the object will awaken anybody who is waiting in the <code>waitUntilSet</code> method.</p></dd>
+
+<dt><code class="java"><b>void</b> waitUntilSet()</code></dt>
+<dd><p>Returns once this object is <q>set.</q> This could return 
+immediately if this object has already been set; otherwise, the method 
+will delay indefinitely until somebody sets this object.</p></dd>
+
+</dl></li>
+
+<li><p>Suppose we're given an array of pairs
+(<var>a</var><sub><small><var>i</var></small></sub>,&nbsp;<var>b</var><sub><small><var>i</var></small></sub>),
+where <var>a</var><sub><small>0</small></sub> is 0. This array of pairs specifies
+a sequence of linear equations as follows:</p>
+<center><table><tbody>
+<tr><td><var>x</var><sub><small>0</small></sub></td><td>=</td>
+    <td><var>b</var><sub><small>0</small></sub></td></tr>
+<tr><td><var>x</var><sub><small>1</small></sub></td><td>=</td>
+    <td><var>a</var><sub><small>1</small></sub>
+        <var>x</var><sub><small>0</small></sub>
+        + <var>b</var><sub><small>1</small></sub></td></tr>
+<tr><td><var>x</var><sub><small>2</small></sub></td><td>=</td>
+    <td><var>a</var><sub><small>2</small></sub>
+        <var>x</var><sub><small>1</small></sub>
+        + <var>b</var><sub><small>2</small></sub></td></tr>
+<tr><td></td><td>:</td><td><em>(and so forth)</em></td></tr>
+</tbody></table></center>
+
+<p>We want to compute
+<var>x</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;1</small></sub>.
+We could do this easily enough on a single-processor system.</p>
+
+<blockquote><code class="java"><b>double</b>&nbsp;x&nbsp;=&nbsp;b[<tt>0</tt>];<br>
+<b>for</b>(<b>int</b>&nbsp;i&nbsp;=&nbsp;<tt>1</tt>;&nbsp;i&nbsp;&lt;&nbsp;n;&nbsp;i++)&nbsp;x&nbsp;=&nbsp;a[i]&nbsp;*&nbsp;x&nbsp;+&nbsp;b[i];</code></blockquote>
+
+<p>But we have a parallel system and wish to
+compute the final answer more quickly. A natural approach is to
+try to adapt our parallel scan operation using an operator
+&#8855; as follows.</p>
+
+<center>
+(<var>a</var>, <var>b</var>)
+&#8855;
+(<var>a</var>&#8242;, <var>b</var>&#8242;)
+=
+(0, <var>a</var>&#8242; <var>b</var> + <var>b</var>&#8242;)
+</center>
+
+<p>Applying this &#8855; operator left-to-right through the
+array, we see that we end up with the appropriate values for
+each <var>x</var> (recalling that
+<var>a</var><sub><small>0</small></sub> is defined to be 0).</p>
+
+<center><table><tbody>
+<tr><td>(0, <var>b</var><sub><small>0</small></sub>) &#8855;
+    (<var>a</var><sub><small>1</small></sub>,
+    <var>b</var><sub><small>1</small></sub>)</td>
+    <td>=</td>
+    <td>(0, <var>a</var><sub><small>1</small></sub>
+    <var>b</var><sub><small>0</small></sub>
+    + <var>b</var><sub><small>1</small></sub>)</td>
+    <td>=</td><td>(0, <var>x</var><sub><small>1</small></sub>)</td></tr>
+<tr><td>(0, <var>x</var><sub><small>1</small></sub>) &#8855;
+    (<var>a</var><sub><small>2</small></sub>,
+    <var>b</var><sub><small>2</small></sub>)</td>
+    <td>=</td>
+    <td>(0, <var>a</var><sub><small>2</small></sub>
+    <var>x</var><sub><small>1</small></sub>
+    + <var>b</var><sub><small>2</small></sub>)</td>
+    <td>=</td><td>(0, <var>x</var><sub><small>2</small></sub>)</td></tr>
+<tr><td>(0, <var>x</var><sub><small>2</small></sub>) &#8855;
+    (<var>a</var><sub><small>3</small></sub>,
+    <var>b</var><sub><small>3</small></sub>)</td>
+    <td>=</td>
+    <td>(0, <var>a</var><sub><small>3</small></sub>
+    <var>x</var><sub><small>2</small></sub>
+    + <var>b</var><sub><small>3</small></sub>)</td>
+    <td>=</td><td>(0, <var>x</var><sub><small>3</small></sub>)</td></tr>
+<tr><td></td><td></td><td align="center">:</td></tr>
+</tbody></table></center>
+
+<p>Unfortunately, we can't apply the parallel scan algorithm to this
+operator because it isn't associative.</p>
+
+<center><table><tbody>
+<tr><td colspan="2"><big>(</big>(<var>a</var>, <var>b</var>)
+&#8855;
+(<var>a</var>&#8242;, <var>b</var>&#8242;)<big>)</big>
+&#8855;
+(<var>a</var>&#8243;, <var>b</var>&#8243;)</td>
+<td>=</td>
+<td>(0, <var>a</var>&#8242; <var>b</var> + <var>b</var>&#8242;)
+&#8855;
+(<var>a</var>&#8243;, <var>b</var>&#8243;)</td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;=</td>
+<td>(0, <var>a</var>&#8243; (<var>a</var>&#8242; <var>b</var> + <var>b</var>&#8242;) + <var>b</var>&#8243;)</td>
+<td>=</td>
+<td>(0, <var>a</var>&#8243; <var>a</var>&#8242; <var>b</var> + <var>a</var>&#8243; <var>b</var>&#8242; + <var>b</var>&#8243;)</td></tr>
+<tr><td colspan="2">(<var>a</var>, <var>b</var>)
+&#8855;
+<big>(</big>(<var>a</var>&#8242;, <var>b</var>&#8242;)
+&#8855;
+(<var>a</var>&#8243;, <var>b</var>&#8243;)<big>)</big></td>
+<td>=</td>
+<td>(<var>a</var>, <var>b</var>)
+&#8855;
+(0, <var>a</var>&#8243; <var>b</var>&#8242; + <var>b</var>&#8243;)</td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;=</td>
+<td>(0, 0 <var>b</var> + (<var>a</var>&#8243; <var>b</var>&#8242; + <var>b</var>&#8243;))</td>
+<td>=</td>
+<td>(0, <var>a</var>&#8243; <var>b</var>&#8242; + <var>b</var>&#8243;)</td></tr>
+</tbody></table></center>
+
+<p>Show a new definition of &#8855; &#8212; a slight modification of the
+one shown above &#8212; which is associative and yields the
+correct value of
+<var>x</var><sub><small><var>n</var>&nbsp;&#8722;&nbsp;1</small></sub>
+when applied to our array.</p></li>
+
+<li><p>Suppose we have an array of opening and closing parentheses, and we want to know
+whether the parentheses match &#8212; that is, we consider
+<q>(()())()</q> to match, but not <q>)(())()(</q> or <q>(()))(()</q>.
+Using
+the parallel scan and/or parallel prefix scan operations,
+show how to determine this in
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;log&nbsp;<var>p</var>)
+on a <var>p</var>-processor system. (You need not define a novel &#8855; operator unless it suits your purpose.)</p></li>
+
+<li><p>Suppose we're given an <var>n</var>-element array of
+(&#952;,&nbsp;<var>d</var>)
+pairs, representing a sequence of commands to a turtle to turn
+counterclockwise &#952; degrees and then go forward <var>d</var> units. Below
+is an example array and the corresponding movement it
+represents, where the turtle's initial orientation is to the
+east &#8212; though the first command immediately turns the turtle
+to face northeast.</p>
+
+<center><table rules="groups"><thead>
+<tr><td align="center">array of commands</td><td align="center">movement diagram</td></tr>
+</thead><tbody><tr>
+<td valign="top" align="center"><table><tbody>
+<tr><td align="right"><em>0:</em></td><td>(45,&nbsp;40)</td></tr>
+<tr><td align="right"><em>1:</em></td><td>(30,&nbsp;50)</td></tr>
+<tr><td align="right"><em>2:</em></td><td>(105,&nbsp;40)</td></tr>
+<tr><td align="right"><em>3:</em></td><td>(90,&nbsp;20)</td></tr>
+</tbody></table></td>
+<td valign="top" align="center"><img src="Introduction%20to%20parallel%20&amp;%20distributed%20algorithms_files/turtle-move.png" height="99" width="151"></td>
+</tr></tbody></table></center>
+
+<p>Suppose we have a <var>p</var>-processor system, and we want to compute the
+turtle's final location in
+<var>O</var>(<span class="num"><var>n</var></span>&nbsp;/&nbsp;<span class="den"><var>p</var></span>&nbsp;+&nbsp;log&nbsp;<var>p</var>) time.
+Describe such an algorithm using the parallel scan and/or parallel
+prefix scan algorithms. Argue briefly that your algorithm works correctly.</p></li>
+
+<li><p>On a parallel system, we have an array of <q>messages</q>
+represented as integers and an array saying how far each message
+should be copied into the array. For example, given the two arrays
+<code>msgs</code> and <code>dist</code> below, we want to arrive at
+the solution <code>recv</code>.</p>
+
+<center><table rules="groups"><thead>
+<tr><td></td><td>0</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td></tr>
+</thead><tbody>
+<tr><td><code>msgs</code></td>
+    <td>3,</td><td>0,</td><td>0,</td><td>8,</td><td>0,</td><td>0,</td><td>5,</td><td>6,</td><td>0</td></tr>
+<tr><td><code>dist</code></td>
+    <td>3,</td><td>0,</td><td>0,</td><td>2,</td><td>0,</td><td>0,</td><td>1,</td><td>2,</td><td>0</td></tr>
+<tr><td><code>recv</code></td>
+    <td>3,</td><td>3,</td><td>3,</td><td>8,</td><td>8,</td><td>0,</td><td>5,</td><td>6,</td><td>6</td></tr>
+</tbody></table></center>
+
+<p>In this example, <code class="java">dist[<tt>0</tt>]</code> is 3, and so we see that
+<code class="java">msgs[<tt>0</tt>]</code> occurs in the three entries of <code>recv</code>
+starting at index 0. Similarly, <code class="java">dist[<tt>7</tt>]</code> is 2,
+so <code class="java">msgs[<tt>7</tt>]</code> is copied into the two entries of
+<code>recv</code> starting at index 7. You may assume that
+<code>dist</code> is structured so that no interval overlaps (for
+example, if <code class="java">dist[<tt>0</tt>]</code> is 4,
+then <code class="java">dist[<tt>1</tt>]</code>
+through <code class="java">dist[<tt>3</tt>]</code>
+will necessarily be 0) and the final interval does not go
+off the array's end. However, there may be some entries that lie outside
+ any interval &#8212; as you can see with entry&nbsp;5 in the above example.</p>
+
+<p>Show how this job can be accomplished using a parallel prefix
+scan. This is a matter of identifying an operation &#8855;,
+explaining why you know this operator does its job, and showing that
+the operator is associative and has an identity.</p></li>
+
+</ol>
+
+<h2><a class="sec" name="refs"></a> References</h2>
+
+<dl>
+
+<dt>Guy Blelloch,
+<q><a href="http://www.cs.cmu.edu/%7Eblelloch/papers/Ble93.pdf">Prefix
+Sums and Their Applications</a>,</q>
+in <em>Synthesis of Parallel Algorithms</em>, edited by John H
+Reif, Morgan Kaufmann, 1991.</dt>
+<dd>This book chapter introduces the parallel scan as a computation
+primitive. The book is hard to find, but you can freely download
+the chapter from the author's Web site.</dd>
+
+<dt>Alan Gibbons and Wojciech Rytter,
+<em>Efficient Parallel Algorithms</em>,
+Cambridge University Press, 1989.</dt>
+<dd>This short book (268 pages) is a good survey of
+parallel algorithms, though it is a bit dated. It includes a discussion
+of parallel sorting algorithms and <b><var>P</var></b>-completeness.</dd>
+
+<dt>Mark Harris, Shubhabrata Sengupta, and John Owens,
+<q><a href="http://http.developer.nvidia.com/GPUGems3/gpugems3_ch39.html">Parallel
+Prefix Sum (Scan) with CUDA</a>,</q>
+in <em>GPU Gems 3,</em> edited by Hubert Nguyen, 2007.</dt>
+<dd>The article is for programmers trying to learn CUDA, a toolkit
+developed by NVIDIA for writing programs for execution on their GPUs.</dd>
+
+<dt>Robert Sedgewick, <em>Algorithms in Java, Parts 1&#8211;4</em>, Addison-Wesley, 2002.</dt>
+<dd>This book includes a more extensive discussion of Batcher's sorting algorithm, with an argument for why it works.</dd>
+
+</dl>
+
+</div></body></html>
